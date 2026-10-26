@@ -1,0 +1,11 @@
+version: '3.8'
+services:
+  markmap:
+    build: .
+    ports:
+      - "9000:9000"
+    volumes:
+      - ./content:/app/content   # Markdown persistente
+      - ./images:/app/images       # Tus imágenes locales (lectura/escritura)
+      
+

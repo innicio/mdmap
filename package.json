@@ -1,0 +1,12 @@
+{
+  "name": "offline-markmap",
+  "version": "1.0.0",
+  "description": "Editor Markmap offline con autosave y exportación",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
