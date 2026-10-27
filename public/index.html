@@ -6,6 +6,7 @@
   <title>Markmap Local Studio</title>
   <link rel="stylesheet" href="/assets/codemirror.css"/>
   <link rel="stylesheet" href="/assets/markmap-toolbar.css"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"/>
   <style>
     :root {
       --bg-bar: #1e293b;
@@ -19,7 +20,6 @@
     html, body { margin: 0; height: 100vh; font-family: system-ui, -apple-system, sans-serif; overflow: hidden; }
     body { display: flex; flex-direction: column; }
 
-    /* Barra superior unificada */
     header {
       height: 48px; background: var(--bg-bar); color: var(--text-bar);
       display: flex; align-items: center; justify-content: space-between;
@@ -46,41 +46,69 @@
     #save-status.saving { color: #fbbf24; }
     #save-status.saved { color: #34d399; }
 
-    /* Contenedor principal dividido */
     #workspace {
       flex: 1; display: flex; height: calc(100vh - 48px); position: relative;
     }
+
+    /* Panel Lateral (Sidebar) de Archivos y Tags */
+    #sidebar {
+      width: 240px; min-width: 190px; background: #0f172a; color: #e2e8f0;
+      display: flex; flex-direction: column; border-right: 1px solid #334155; font-size: 13px;
+    }
+    #sidebar.hidden { display: none !important; }
+    .sb-section { padding: 10px; border-bottom: 1px solid #1e293b; }
+    #sb-search {
+      width: 100%; background: #1e293b; border: 1px solid #334155; color: #fff;
+      padding: 6px 8px; border-radius: 4px; font-size: 12px;
+    }
+    #sb-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+    .tag-pill {
+      background: #1e293b; color: #94a3b8; padding: 2px 7px; border-radius: 10px;
+      font-size: 11px; cursor: pointer; border: 1px solid #334155;
+    }
+    .tag-pill.active { background: var(--accent); color: #fff; border-color: #60a5fa; }
+    #sb-tree { flex: 1; overflow-y: auto; padding: 6px 0; }
+    .folder-title {
+      padding: 5px 10px; font-weight: 600; color: #94a3b8; font-size: 11px;
+      text-transform: uppercase; letter-spacing: 0.5px; margin-top: 6px;
+    }
+    .file-item {
+      padding: 6px 12px 6px 20px; cursor: pointer; display: flex;
+      justify-content: space-between; align-items: center; color: #cbd5e1;
+    }
+    .file-item:hover { background: #1e293b; }
+    .file-item.active { background: #1e3a8a; color: #fff; font-weight: 500; border-left: 3px solid #60a5fa; }
+    .file-tags { font-size: 10px; color: #64748b; margin-left: 6px; }
+
+    /* Panel del Editor */
     #editor-pane {
-      width: 45%; min-width: 240px; max-width: 80%;
+      width: 42%; min-width: 240px; max-width: 80%;
       display: flex; flex-direction: column; border-right: 1px solid var(--border);
     }
-    #editor-pane.hidden { display: none; }
+    #editor-pane.hidden { display: none !important; }
     .CodeMirror { flex: 1; height: 100%; font-size: 14px; line-height: 1.5; font-family: 'Fira Code', 'Consolas', monospace; }
 
-    /* Barra inferior del editor para insertar imágenes rápido */
     #editor-footer {
       background: var(--bg-panel); border-top: 1px solid var(--border);
       padding: 6px 10px; display: flex; align-items: center; justify-content: space-between; font-size: 12px;
     }
-    #editor-footer select { background: #fff; color: #1e293b; border-color: var(--border); }
-    #editor-footer button { background: #fff; color: #1e293b; border-color: var(--border); }
+    #editor-footer select, #editor-footer button {
+      background: #fff; color: #1e293b; border-color: var(--border);
+    }
     #editor-footer button:hover { background: #e2e8f0; }
 
-    /* Divisor arrastrable */
     #resizer {
       width: 5px; cursor: col-resize; background: #e2e8f0; transition: background 0.2s;
     }
     #resizer:hover { background: var(--accent); }
 
-    /* Panel de previsualización */
+    /* Panel de Previsualización */
     #preview-pane {
       flex: 1; display: flex; flex-direction: column; position: relative; background: #ffffff;
     }
     svg#mindmap { flex: 1; width: 100%; height: 100%; display: block; }
-    /* Limitar tamaño de imágenes dentro de los nodos del mapa para que no desborden */
     svg#mindmap img { max-height: 160px; width: auto; border-radius: 4px; display: block; margin: 4px 0; }
 
-    /* Galería inferior plegable */
     #images-drawer {
       max-height: 170px; overflow-x: auto; overflow-y: hidden;
       border-top: 1px solid var(--border); background: #f8fafc;
@@ -98,27 +126,25 @@
 <body>
 
   <header>
-    <!-- Grupo Izquierdo: Gestión de Archivos -->
     <div class="bar-group">
-      <span class="brand">Markmap</span>
-      <button id="btn-toggle-editor" title="Mostrar/Ocultar editor">⇄ Editor</button>
+      <span class="brand">mdmap</span>
+      <button id="btn-toggle-sb" class="active" title="Mostrar/Ocultar panel de archivos">📁 Archivos</button>
+      <button id="btn-toggle-editor" class="active" title="Mostrar/Ocultar editor">⇄ Editor</button>
       <select id="file-select" title="Seleccionar documento Markdown"></select>
       <button id="btn-new-file" title="Crear nuevo archivo Markdown">+ Nuevo</button>
       <button id="btn-del-file" class="danger" title="Borrar archivo actual">🗑</button>
       <span id="save-status" class="saved">Guardado</span>
     </div>
 
-    <!-- Grupo Central: Opciones reales de Markmap -->
     <div class="bar-group">
       <button id="btn-fit" title="Encajar mapa en pantalla">⊡ Ajustar</button>
       <button id="btn-autofit" title="Ajustar automáticamente al escribir">Auto-Fit</button>
       <button id="btn-solid-color" title="Congelar colores por rama principal">Color sólido</button>
-      <button id="btn-wrap-text" title="Ajustar líneas de texto largas (maxWidth: 300px)">Ajustar texto</button>
+      <button id="btn-wrap-text" title="Definir ancho máximo de texto en píxeles">Ajustar texto</button>
       <button id="btn-expand-level" title="Definir nivel de despliegue inicial">Nivel máx.</button>
       <button id="btn-toggle-gallery" title="Mostrar/Ocultar cajón inferior de imágenes">🖼 Cajón Imgs</button>
     </div>
 
-    <!-- Grupo Derecho: Exportación -->
     <div class="bar-group">
       <button id="export-svg">↓ SVG</button>
       <button id="export-html" class="primary">↓ HTML autónomo</button>
@@ -126,6 +152,14 @@
   </header>
 
   <div id="workspace">
+    <aside id="sidebar">
+      <div class="sb-section">
+        <input type="text" id="sb-search" placeholder="🔍 Buscar documento o carpeta..."/>
+        <div id="sb-tags"></div>
+      </div>
+      <div id="sb-tree"></div>
+    </aside>
+
     <div id="editor-pane">
       <textarea id="markdown"></textarea>
       <div id="editor-footer">
@@ -148,7 +182,6 @@
     </div>
   </div>
 
-  <!-- Librerías locales -->
   <script src="/assets/d3.min.js"></script>
   <script src="/assets/markmap-lib.iife.js"></script>
   <script src="/assets/markmap-view.iife.js"></script>
@@ -160,21 +193,19 @@
 
   <script>
   (async function(){
-    const { Transformer, Markmap, Toolbar } = window.markmap;
+    const { Transformer, Markmap, Toolbar, loadCSS, loadJS } = window.markmap;
     const transformer = new Transformer();
     const svgEl = document.getElementById('mindmap');
     const mm = Markmap.create(svgEl);
 
-    // Toolbar flotante inferior derecha
     const tb = new Toolbar();
-    tb.setBrand(false); // Desactiva la marca en la API de markmap-toolbar
+    if (tb.setBrand) tb.setBrand(false);
     tb.attach(mm);
     const tbEl = tb.render();
-    tbEl.querySelector('.mm-toolbar-brand')?.remove(); // Lo elimina del DOM por si la versión ignora setBrand
+    tbEl.querySelector('.mm-toolbar-brand')?.remove();
     Object.assign(tbEl.style, { position: 'absolute', bottom: '16px', right: '16px', zIndex: 10 });
     document.getElementById('preview-pane').appendChild(tbEl);
 
-    // Inicializar CodeMirror
     const cm = CodeMirror.fromTextArea(document.getElementById('markdown'), {
       mode: 'markdown',
       lineNumbers: true,
@@ -183,16 +214,18 @@
       placeholder: 'Escribe tu Markdown aquí…'
     });
 
-    // Estado de la aplicación
     let currentFile = 'doc.md';
     let contentCache = '';
     let saveTimer = null;
     let isLoadingFile = false;
+    let allFiles = [];
+    let activeTag = null;
+    const fileSelect = document.getElementById('file-select');
 
     const state = {
       autoFit: false,
-      solidColor: false,
-      wrapText: false,
+      colorFreezeLevel: 0,
+      maxWidth: 0,
       expandLevel: -1,
       showGallery: false
     };
@@ -203,7 +236,6 @@
       statusEl.className = cls;
     }
 
-    // Extraer rutas de imágenes Markdown ![alt](url)
     function extractImagePaths(md) {
       const re = /!\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
       const out = [];
@@ -222,7 +254,6 @@
       });
     }
 
-    // Reemplaza las rutas locales por Base64 en el texto Markdown para exportaciones autónomas
     async function embedImagesInMarkdown(md) {
       const paths = extractImagePaths(md);
       let updatedMd = md;
@@ -237,20 +268,27 @@
       return updatedMd;
     }
 
-    // Aplicar opciones reales de markmap-view
-    function applyMarkmapOptions() {
-      mm.setOptions({
-        colorFreezeLevel: state.solidColor ? 2 : 0,
-        maxWidth: state.wrapText ? 300 : 0,
+    const palette = d3.scaleOrdinal(d3.schemeCategory10);
+    function getMarkmapOptions() {
+      const freeze = state.colorFreezeLevel;
+      const rawOpts = {
+        colorFreezeLevel: freeze,
+        maxWidth: state.maxWidth > 0 ? state.maxWidth : 0,
         initialExpandLevel: state.expandLevel
-      });
+      };
+      const derived = window.markmap.deriveOptions ? window.markmap.deriveOptions(rawOpts) : rawOpts;
+      // Forzar función de color para que el cambio a color sólido sea inmediato en todas las versiones
+      derived.color = (node) => {
+        const pathParts = String(node.state?.path || node.depth || '0').split('.');
+        const key = freeze > 0 ? pathParts.slice(0, freeze).join('.') : pathParts.join('.');
+        return palette(key);
+      };
+      return derived;
     }
 
-    // Renderizar mapa y actualizar cajón de imágenes
     async function render(forceFit = false) {
       const md = cm.getValue();
 
-      // Guardado diferido (debounce 500ms) solo si el cambio viene del usuario
       if (!isLoadingFile && md !== contentCache) {
         contentCache = md;
         setStatus('Guardando...', 'saving');
@@ -262,18 +300,23 @@
             body: md
           });
           setStatus('Guardado', 'saved');
+          refreshSidebarMetadata();
         }, 500);
       }
 
-      applyMarkmapOptions();
-      const { root } = transformer.transform(md);
-      mm.setData(root);
+      const { root, features } = transformer.transform(md);
+      const { styles, scripts } = transformer.getUsedAssets(features);
+      if (styles && loadCSS) loadCSS(styles);
+      if (scripts && loadJS) await loadJS(scripts, { getMarkmap: () => window.markmap });
+
+      const opts = getMarkmapOptions();
+      mm.setOptions(opts);
+      mm.setData(root, opts);
 
       if (forceFit || state.autoFit) {
         requestAnimationFrame(() => mm.fit());
       }
 
-      // Actualizar cajón de imágenes inferior si está activo
       const drawer = document.getElementById('images-drawer');
       const imgPaths = extractImagePaths(md);
       if (state.showGallery && imgPaths.length > 0) {
@@ -294,18 +337,88 @@
     cm.on('change', () => render(false));
     if (window.ResizeObserver) new ResizeObserver(() => mm.fit()).observe(svgEl);
 
-    // --- Gestión de Archivos ---
-    const fileSelect = document.getElementById('file-select');
+    // --- Gestión de Archivos y Sidebar ---
+    async function refreshSidebarMetadata() {
+      const raw = await fetch('/api/files').then(r => r.json());
+      allFiles = (Array.isArray(raw) ? raw : []).map(item => {
+        if (typeof item === 'string') {
+          return { path: item, name: item.split('/').pop(), folder: '', tags: [] };
+        }
+        return {
+          path: item.path || item.name || 'doc.md',
+          name: item.name || item.path || 'doc.md',
+          folder: item.folder || '',
+          tags: Array.isArray(item.tags) ? item.tags : []
+        };
+      });
+      if (fileSelect) {
+        fileSelect.innerHTML = allFiles.map(f => `<option value="${f.path}">${f.path}</option>`).join('');
+        fileSelect.value = currentFile;
+      }
+      renderSidebar();
+    }
 
     async function loadFileList(selectFile = currentFile) {
-      const files = await fetch('/api/files').then(r => r.json());
-      fileSelect.innerHTML = files.map(f => `<option value="${f}">${f}</option>`).join('');
-      if (files.includes(selectFile)) {
-        fileSelect.value = selectFile;
-      } else if (files.length > 0) {
-        fileSelect.value = files[0];
+      await refreshSidebarMetadata();
+      const exists = allFiles.some(f => f.path === selectFile);
+      const target = exists ? selectFile : (allFiles[0]?.path || 'doc.md');
+      if (fileSelect) fileSelect.value = target;
+      await loadDocument(target);
+      renderSidebar();
+    }
+
+    function renderSidebar() {
+      const searchEl = document.getElementById('sb-search');
+      const tagsContainer = document.getElementById('sb-tags');
+      const treeContainer = document.getElementById('sb-tree');
+      if (!treeContainer) return;
+
+      const q = (searchEl ? searchEl.value : '').toLowerCase();
+
+      const tagSet = new Set();
+      allFiles.forEach(f => (f.tags || []).forEach(t => tagSet.add(t)));
+      if (tagsContainer) {
+        tagsContainer.innerHTML = [...tagSet].map(t =>
+          `<span class="tag-pill ${activeTag === t ? 'active' : ''}" data-tag="${t}">#${t}</span>`
+        ).join('');
+        tagsContainer.querySelectorAll('.tag-pill').forEach(el => {
+          el.onclick = () => {
+            activeTag = (activeTag === el.dataset.tag) ? null : el.dataset.tag;
+            renderSidebar();
+          };
+        });
       }
-      await loadDocument(fileSelect.value);
+
+      const filtered = allFiles.filter(f => {
+        const matchText = f.path.toLowerCase().includes(q);
+        const matchTag = !activeTag || (f.tags || []).includes(activeTag);
+        return matchText && matchTag;
+      });
+
+      const groups = {};
+      filtered.forEach(f => {
+        const folderName = f.folder || 'Raíz (/)';
+        if (!groups[folderName]) groups[folderName] = [];
+        groups[folderName].push(f);
+      });
+
+      treeContainer.innerHTML = Object.keys(groups).sort().map(folder => {
+        const itemsHtml = groups[folder].map(f => `
+          <div class="file-item ${f.path === currentFile ? 'active' : ''}" data-path="${f.path}">
+            <span>📄 ${f.name.replace(/\.md$/, '')}</span>
+            <span class="file-tags">${(f.tags || []).map(t => '#' + t).join(' ')}</span>
+          </div>
+        `).join('');
+        return `<div class="folder-title">📁 ${folder}</div>${itemsHtml}`;
+      }).join('');
+
+      treeContainer.querySelectorAll('.file-item').forEach(el => {
+        el.onclick = async () => {
+          if (fileSelect) fileSelect.value = el.dataset.path;
+          await loadDocument(el.dataset.path);
+          renderSidebar();
+        };
+      });
     }
 
     async function loadDocument(filename) {
@@ -316,18 +429,25 @@
       cm.setValue(content);
       isLoadingFile = false;
       setStatus('Guardado', 'saved');
-      render(true); // Encajar mapa al abrir documento nuevo
+      await render(true);
     }
 
-    fileSelect.onchange = () => loadDocument(fileSelect.value);
+    document.getElementById('sb-search').oninput = renderSidebar;
+    fileSelect.onchange = async () => {
+      await loadDocument(fileSelect.value);
+      renderSidebar();
+    };
 
     document.getElementById('btn-new-file').onclick = async () => {
-      let name = prompt('Nombre del nuevo archivo (ej. diabetes.md):');
+      let name = prompt('Nombre del nuevo archivo (puedes incluir carpeta, ej. clinica/insulina.md):');
       if (!name) return;
       if (!name.endsWith('.md')) name += '.md';
+      const title = name.split('/').pop().replace('.md', '');
+      const initialMd = `---\ntags: [general]\n---\n# ${title}\n\n## Apartado 1\n- Idea A\n- Idea B`;
       await fetch(`/api/content?file=${encodeURIComponent(name)}`, {
         method: 'POST',
-        body: `# ${name.replace('.md', '')}\n\n## Sección 1\n- Punto A`
+        headers: { 'Content-Type': 'text/plain' },
+        body: initialMd
       });
       await loadFileList(name);
     };
@@ -339,7 +459,7 @@
       await loadFileList('doc.md');
     };
 
-    // --- Selector y subida de imágenes locales ---
+    // --- Imágenes locales ---
     const imgSelect = document.getElementById('img-select');
     async function refreshImageList(selected = '') {
       const imgs = await fetch('/api/images').then(r => r.json());
@@ -358,6 +478,7 @@
       reader.onloadend = async () => {
         const res = await fetch(`/api/images?name=${encodeURIComponent(file.name)}`, {
           method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
           body: reader.result
         });
         if (res.ok) {
@@ -381,10 +502,18 @@
       cm.focus();
     };
 
-    // --- Botones de la barra de herramientas ---
+    // --- Botones de la Barra Superior ---
+    document.getElementById('btn-toggle-sb').onclick = function() {
+      const sb = document.getElementById('sidebar');
+      sb.classList.toggle('hidden');
+      this.classList.toggle('active', !sb.classList.contains('hidden'));
+      setTimeout(() => mm.fit(), 50);
+    };
+
     document.getElementById('btn-toggle-editor').onclick = function() {
       const pane = document.getElementById('editor-pane');
       pane.classList.toggle('hidden');
+      this.classList.toggle('active', !pane.classList.contains('hidden'));
       setTimeout(() => mm.fit(), 50);
     };
 
@@ -396,14 +525,19 @@
     };
 
     document.getElementById('btn-solid-color').onclick = function() {
-      state.solidColor = !state.solidColor;
-      this.classList.toggle('active', state.solidColor);
+      state.colorFreezeLevel = state.colorFreezeLevel ? 0 : 2;
+      this.classList.toggle('active', state.colorFreezeLevel > 0);
       render(false);
     };
 
     document.getElementById('btn-wrap-text').onclick = function() {
-      state.wrapText = !state.wrapText;
-      this.classList.toggle('active', state.wrapText);
+      const current = state.maxWidth > 0 ? state.maxWidth : '';
+      const input = prompt('Ancho máximo de texto en píxeles (ej. 250, 350 o vacío para desactivar):', current);
+      if (input === null) return;
+      const n = parseInt(input, 10);
+      state.maxWidth = (isNaN(n) || n <= 0) ? 0 : n;
+      this.classList.toggle('active', state.maxWidth > 0);
+      this.textContent = state.maxWidth > 0 ? `Ancho: ${state.maxWidth}px` : 'Ajustar texto';
       render(true);
     };
 
@@ -429,14 +563,15 @@
       if (url) cm.setValue(await fetch(url).then(r => r.text()));
     };
 
-    // --- Divisor arrastrable (Resizer) ---
+    // Divisor redimensionable
     const resizer = document.getElementById('resizer');
     const editorPane = document.getElementById('editor-pane');
     resizer.addEventListener('mousedown', (e) => {
       e.preventDefault();
       const onMove = (ev) => {
-        const newWidth = (ev.clientX / window.innerWidth) * 100;
-        if (newWidth > 15 && newWidth < 85) editorPane.style.width = `${newWidth}%`;
+        const sbWidth = document.getElementById('sidebar').classList.contains('hidden') ? 0 : document.getElementById('sidebar').offsetWidth;
+        const newWidth = ((ev.clientX - sbWidth) / window.innerWidth) * 100;
+        if (newWidth > 15 && newWidth < 80) editorPane.style.width = `${newWidth}%`;
       };
       const onUp = () => {
         window.removeEventListener('mousemove', onMove);
@@ -447,14 +582,13 @@
       window.addEventListener('mouseup', onUp);
     });
 
-    // --- Exportar SVG (Limpio y con imágenes en Base64) ---
+    // Exportar SVG
     document.getElementById('export-svg').onclick = async () => {
       const cloneSvg = svgEl.cloneNode(true);
       cloneSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
       cloneSvg.setAttribute('width', svgEl.clientWidth);
       cloneSvg.setAttribute('height', svgEl.clientHeight);
 
-      // Convertir imágenes dentro del SVG a DataURI para que no se rompan fuera del servidor
       const imgs = cloneSvg.querySelectorAll('img');
       for (const img of imgs) {
         const src = img.getAttribute('src');
@@ -468,12 +602,12 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${currentFile.replace('.md', '')}.svg`;
+      a.download = `${currentFile.replace('.md', '').replace(/\//g, '_')}.svg`;
       a.click();
       URL.revokeObjectURL(url);
     };
 
-    // --- Exportar HTML Autónomo (Todo offline e imágenes Base64 dentro de los nodos) ---
+    // Exportar HTML Autónomo
     document.getElementById('export-html').onclick = async () => {
       const rawMd = cm.getValue();
       const embeddedMd = await embedImagesInMarkdown(rawMd);
@@ -487,8 +621,8 @@
       ]);
 
       const exportOptions = JSON.stringify({
-        colorFreezeLevel: state.solidColor ? 2 : 0,
-        maxWidth: state.wrapText ? 300 : 0,
+        colorFreezeLevel: state.colorFreezeLevel > 0 ? state.colorFreezeLevel : 0,
+        maxWidth: state.maxWidth > 0 ? state.maxWidth : 0,
         initialExpandLevel: state.expandLevel
       });
 
@@ -497,10 +631,12 @@
 <head>
   <meta charset="utf-8">
   <title>${currentFile.replace('.md', '')} - Markmap</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"/>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body, #mindmap { width: 100vw; height: 100vh; display: block; font-family: sans-serif; }
     svg#mindmap img { max-height: 160px; width: auto; border-radius: 4px; display: block; margin: 4px 0; }
+    .mm-toolbar-brand { display: none !important; }
     ${cssTB}
   </style>
 </head>
@@ -511,21 +647,28 @@
   <script>${viewjs}<\/script>
   <script>${jsTB}<\/script>
   <script>
-    const { Transformer, Markmap, Toolbar } = window.markmap;
-    const transformer = new Transformer();
-    const svgEl = document.getElementById("mindmap");
-    const mm = Markmap.create(svgEl, ${exportOptions});
-    const { root } = transformer.transform(${JSON.stringify(embeddedMd)});
-    mm.setData(root);
-    setTimeout(() => mm.fit(), 50);
-    window.addEventListener("resize", () => mm.fit());
-    const tb = new Toolbar();
-    tb.setBrand(false);
-    tb.attach(mm);
-    const el = tb.render();
-    el.querySelector(".mm-toolbar-brand")?.remove();
-    Object.assign(el.style, { position: "absolute", bottom: "20px", right: "20px" });
-    document.body.appendChild(el);
+    (async function(){
+      const { Transformer, Markmap, Toolbar, loadCSS, loadJS, deriveOptions } = window.markmap;
+      const transformer = new Transformer();
+      const svgEl = document.getElementById("mindmap");
+      const rawOpts = ${exportOptions};
+      const opts = deriveOptions ? deriveOptions(rawOpts) : rawOpts;
+      const mm = Markmap.create(svgEl, opts);
+      const { root, features } = transformer.transform(${JSON.stringify(embeddedMd)});
+      const { styles, scripts } = transformer.getUsedAssets(features);
+      if (styles && loadCSS) loadCSS(styles);
+      if (scripts && loadJS) await loadJS(scripts, { getMarkmap: () => window.markmap });
+      mm.setData(root, opts);
+      setTimeout(() => mm.fit(), 50);
+      window.addEventListener("resize", () => mm.fit());
+      const tb = new Toolbar();
+      if (tb.setBrand) tb.setBrand(false);
+      tb.attach(mm);
+      const el = tb.render();
+      el.querySelector(".mm-toolbar-brand")?.remove();
+      Object.assign(el.style, { position: "absolute", bottom: "20px", right: "20px" });
+      document.body.appendChild(el);
+    })();
   <\/script>
 </body>
 </html>`;
@@ -534,12 +677,12 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${currentFile.replace('.md', '')}.html`;
+      a.download = `${currentFile.replace('.md', '').replace(/\//g, '_')}.html`;
       a.click();
       URL.revokeObjectURL(url);
     };
 
-    // Carga inicial limpia (sin doble render)
+    // Carga inicial
     await loadFileList('doc.md');
   })();
   </script>

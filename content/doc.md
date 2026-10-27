@@ -1,24 +1,10 @@
----
-title: A
-markmap:
-  colorFreezeLevel: 2
-  htmlParser:
-    selector: h1,h2,h3,ul,ol,li,table,pre
-initialExpandLevel:  2
-
----
-
-# a
-
-- c
-	- a
-
-# B
-
-## d
-
-- afsdfsdfs
-- b
-- c
-- s
-- d
+# Sistema nervioso
+## Sistema nerviosos central
+- Encéfalo
+	- Cerebro
+	- Cerebelo
+	- Bulbo raquídeo
+- Médula espinal
+## Sistema nervioso periférico
+- Nervios motores
+- Nervio sensitivos
