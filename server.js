@@ -102,21 +102,22 @@ app.post('/api/content', (req, res) => {
   });
 });
 
-// Renombrar un archivo .md
-app.post('/api/rename', express.json(), (req, res) => {
-  const { oldName, newName } = req.body;
+// Renombrar o mover un archivo .md (soporta query params y body JSON)
+app.post('/api/rename', (req, res) => {
+  const oldName = req.query.old || (req.body && req.body.oldName);
+  let newName = req.query.new || (req.body && req.body.newName);
   if (!oldName || !newName) return res.status(400).send('Nombres inválidos');
-  
-  const safeOld = path.basename(oldName);
-  let safeNew = path.basename(newName);
-  if (!safeNew.endsWith('.md')) safeNew += '.md';
 
-  const oldPath = path.join(CONTENT_DIR, safeOld);
-  const newPath = path.join(CONTENT_DIR, safeNew);
+  if (!newName.endsWith('.md')) newName += '.md';
+
+  const oldPath = resolveSafePath(oldName);
+  const newPath = resolveSafePath(newName);
+  fs.mkdirSync(path.dirname(newPath), { recursive: true });
 
   fs.rename(oldPath, newPath, err => {
     if (err) return res.status(500).send('Error al renombrar el archivo');
-    res.send(safeNew);
+    const relNew = path.relative(CONTENT_DIR, newPath).replace(/\\/g, '/');
+    res.send(relNew);
   });
 });
 
@@ -133,6 +134,13 @@ app.delete('/api/content', (req, res) => {
     if (err) return res.status(500).send('Error eliminando archivo');
     res.sendStatus(200);
   });
+});
+
+// Icono PNG válido para cumplir el requisito estricto de instalación PWA en Chrome/Android
+app.get('/api/pwa-icon', (req, res) => {
+  const pngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgBAMAAACBVGfHAAAAGFBMVEUce28/f39/bfl/pf9/v/+fpf+/v/////86wW7fAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAAQUlEQVQokWNgGAWjYBSMAggwMjI6AglG52B0cHAIIsH4Hw2D+f8ZMP7HgOH/B4b/Hxn+f2L4/5nh/xeG/98YBgEArRcX0b5L2pAAAAAASUVORK5CYII=';
+  res.setHeader('Content-Type', 'image/png');
+  res.send(Buffer.from(pngBase64, 'base64'));
 });
 
 const PORT = process.env.PORT || 9000;

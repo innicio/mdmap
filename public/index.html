@@ -4,20 +4,23 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
   <meta name="theme-color" content="#1e1e1e"/>
-  <title>Markmap Local Studio</title>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <title>Markmap & Knit Studio</title>
   <link rel="manifest" href="/manifest.json"/>
+  <link rel="apple-touch-icon" href="/api/pwa-icon?size=192"/>
   <link rel="stylesheet" href="/assets/codemirror.css"/>
   <link rel="stylesheet" href="/assets/markmap-toolbar.css"/>
+  <!-- KaTeX y Marked en el head para compilación instantánea en la carga inicial -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
-  <!-- ====================================================================
-       PUNTO 3: REGLAS CSS RESPONSIVAS Y TEMA OBSIDIAN (DARK/LIGHT)
-       ==================================================================== -->
   <style>
     :root {
       --bg-primary: #1e1e1e;
       --bg-secondary: #252526;
-      --bg-elevated: rgba(37, 37, 38, 0.92);
+      --bg-elevated: rgba(37, 37, 38, 0.94);
       --text-normal: #dcddde;
       --text-muted: #8e8e93;
       --accent: #7f6df2;
@@ -25,14 +28,13 @@
       --danger: #e11d48;
       --border: #333333;
       --header-h: 46px;
-      --bottom-nav-h: 54px;
       --line-width: 68ch;
     }
 
     body.theme-light {
       --bg-primary: #ffffff;
       --bg-secondary: #f3f4f6;
-      --bg-elevated: rgba(243, 244, 246, 0.92);
+      --bg-elevated: rgba(243, 244, 246, 0.94);
       --text-normal: #1e293b;
       --text-muted: #64748b;
       --border: #cbd5e1;
@@ -42,14 +44,13 @@
     html, body {
       margin: 0; padding: 0; height: 100dvh;
       background: var(--bg-primary); color: var(--text-normal);
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       overflow: hidden; overscroll-behavior-y: none;
     }
 
-    /* Botones e inputs generales */
     button, select, input[type="text"] {
       background: var(--bg-primary); color: var(--text-normal);
-      border: 1px solid var(--border); padding: 6px 10px;
+      border: 1px solid var(--border); padding: 5px 10px;
       border-radius: 6px; font-size: 12px; cursor: pointer;
       transition: background 0.15s, border-color 0.15s;
     }
@@ -57,11 +58,12 @@
     button.active, button.primary {
       background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600;
     }
+    button.primary:hover { background: var(--accent-hover); }
     button.danger:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
-    .icon-btn { font-size: 15px; padding: 5px 9px; background: transparent; border-color: transparent; }
+    .icon-btn { font-size: 15px; padding: 5px 8px; background: transparent; border-color: transparent; }
     .icon-btn:hover { background: rgba(127, 109, 242, 0.15); }
 
-    /* Indicador Pull-Down y Paleta de Comandos Flotante */
+    /* Indicador Pull-Down y Paleta de Comandos */
     #pull-indicator {
       position: fixed; top: -40px; left: 50%; transform: translateX(-50%);
       background: var(--accent); color: #fff; padding: 6px 16px;
@@ -83,7 +85,7 @@
     }
     #cmd-input {
       width: 100%; border: none; border-bottom: 1px solid var(--border);
-      padding: 14px 16px; font-size: 15px; background: var(--bg-primary); outline: none; border-radius: 0;
+      padding: 14px 16px; font-size: 15px; background: var(--bg-primary); color: var(--text-normal); outline: none; border-radius: 0;
     }
     #cmd-results { max-height: 55vh; overflow-y: auto; padding: 6px; }
     .cmd-item {
@@ -92,27 +94,31 @@
     }
     .cmd-item:hover { background: var(--accent); color: #fff; }
 
-    /* Cabecera Superior con Autohide */
+    /* Cabecera Superior */
     #app-header {
       height: var(--header-h); background: var(--bg-elevated);
       backdrop-filter: blur(12px); border-bottom: 1px solid var(--border);
       display: flex; align-items: center; justify-content: space-between;
-      padding: 0 12px; position: fixed; top: 0; left: 0; right: 0; z-index: 20;
+      padding: 0 10px; position: fixed; top: 0; left: 0; right: 0; z-index: 20;
+      gap: 8px; overflow-x: auto; white-space: nowrap;
       transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     }
     body.bars-hidden #app-header { transform: translateY(-100%); }
-    .header-left, .header-right { display: flex; align-items: center; gap: 8px; }
-    #active-file-breadcrumb { font-size: 13px; font-weight: 600; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .header-group { display: flex; align-items: center; gap: 6px; }
+    #active-file-breadcrumb {
+      font-size: 13px; font-weight: 600; max-width: 170px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
     #save-status { font-size: 11px; padding: 2px 7px; border-radius: 10px; }
     #save-status.saving { color: #fbbf24; }
     #save-status.saved { color: #34d399; }
 
-    /* Layout Base de Escritorio: 3 Columnas Fijas */
+    /* Layout Base de Escritorio: 3 Columnas */
     #app-workspace {
       display: grid;
       grid-template-columns: 240px 1fr 260px;
       height: 100dvh; padding-top: var(--header-h);
-      transition: grid-template-columns 0.25s ease;
+      transition: grid-template-columns 0.2s ease;
     }
     #app-workspace.hide-left { grid-template-columns: 0px 1fr 260px; }
     #app-workspace.hide-right { grid-template-columns: 240px 1fr 0px; }
@@ -123,9 +129,9 @@
       overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column;
       transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
     }
-    #right-sidebar { border-right: none; border-left: 1px solid var(--border); padding: 12px; gap: 16px; }
+    #right-sidebar { border-right: none; border-left: 1px solid var(--border); padding: 12px; gap: 14px; }
 
-    /* Columna Izquierda: Explorador y Tags */
+    /* Sidebar Izquierdo: Archivos y Tags */
     .sb-section { padding: 10px; border-bottom: 1px solid var(--border); }
     #sb-search { width: 100%; }
     #sb-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
@@ -150,11 +156,11 @@
     }
     body.theme-light .file-item.active { color: var(--accent); }
     .file-tags { font-size: 10px; color: var(--text-muted); margin-left: 6px; }
-    .sb-footer { padding: 10px; border-top: 1px solid var(--border); display: flex; gap: 6px; }
-    .sb-footer button { flex: 1; }
-    .sb-footer button.danger { flex: 0 0 36px; }
+    .sb-footer { padding: 8px; border-top: 1px solid var(--border); display: flex; gap: 5px; }
+    .sb-footer button { flex: 1; padding: 5px 6px; font-size: 11px; }
+    .sb-footer button.danger { flex: 0 0 32px; }
 
-    /* Columna Central: Editor + Mapa */
+    /* Escenario Central: Editor + Visor Dual (Mapa / Knit) */
     #center-stage { display: flex; height: 100%; overflow: hidden; position: relative; }
     #editor-container {
       width: 45%; min-width: 220px; height: 100%;
@@ -163,60 +169,133 @@
     }
     #editor-container.hidden { display: none !important; }
     .CodeMirror {
-      flex: 1; height: 100%; font-size: 15px; line-height: 1.6;
+      flex: 1; height: 100%; font-size: 14.5px; line-height: 1.6;
       background: var(--bg-primary) !important; color: var(--text-normal) !important;
       font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
     }
     .CodeMirror-gutters { background: var(--bg-secondary) !important; border-right: 1px solid var(--border) !important; }
     .CodeMirror-cursor { border-left: 2px solid var(--accent) !important; }
     #editor-container.readable-line-length .CodeMirror-lines {
-      max-width: var(--line-width); margin: 0 auto; padding: 18px 12px;
+      max-width: var(--line-width); margin: 0 auto; padding: 16px 10px;
     }
 
     #resizer { width: 5px; cursor: col-resize; background: var(--border); transition: background 0.2s; }
     #resizer:hover { background: var(--accent); }
 
-    #map-container { flex: 1; height: 100%; position: relative; background: var(--bg-primary); }
-    svg#mindmap { width: 100%; height: 100%; display: block; color: var(--text-normal); }
+    #viewer-container { flex: 1; height: 100%; position: relative; display: flex; flex-direction: column; background: var(--bg-primary); overflow: hidden; }
+    svg#mindmap { flex: 1; width: 100%; height: 100%; display: block; color: var(--text-normal); }
+    svg#mindmap.hidden { display: none !important; }
     svg#mindmap img { max-height: 160px; width: auto; border-radius: 4px; display: block; margin: 4px 0; }
     .mm-toolbar-brand { display: none !important; }
 
-    /* Columna Derecha: Metadatos y Opciones */
-    .meta-section { display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid var(--border); padding-bottom: 14px; }
-    .meta-section h4 { margin: 0 0 4px 0; font-size: 11px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px; }
+    /* --- Visor en vivo estilo RMarkdown (Knit) con TOC flotante --- */
+    #knit-viewer {
+      flex: 1; display: none; height: 100%; overflow: hidden;
+      background: #ffffff; color: #2c3e50; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    #knit-viewer.active { display: flex; }
+    #knit-toc {
+      width: 220px; min-width: 180px; border-right: 1px solid #e2e8f0;
+      background: #f8fafc; padding: 18px 12px; overflow-y: auto; font-size: 13px;
+    }
+    #knit-toc h4 { margin: 0 0 10px 0; font-size: 11px; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px; }
+    #knit-toc a {
+      display: block; color: #475569; text-decoration: none; padding: 5px 8px;
+      border-radius: 4px; margin-bottom: 2px; line-height: 1.35;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    #knit-toc a:hover { background: #e2e8f0; color: #0f172a; }
+    #knit-toc a.toc-h2 { padding-left: 18px; font-size: 12.5px; }
+    #knit-toc a.toc-h3 { padding-left: 30px; font-size: 12px; color: #64748b; }
+
+    #knit-content { flex: 1; overflow-y: auto; padding: 32px 40px; scroll-behavior: smooth; }
+    .knit-body { max-width: 800px; margin: 0 auto; line-height: 1.7; font-size: 15.5px; }
+    .knit-body h1 { font-size: 1.9em; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-top: 0; color: #0f172a; }
+    .knit-body h2 { font-size: 1.45em; border-bottom: 1px solid #f1f5f9; padding-bottom: 6px; margin-top: 1.6em; color: #1e293b; }
+    .knit-body h3 { font-size: 1.2em; margin-top: 1.3em; color: #334155; }
+    .knit-body img { max-width: 100%; height: auto; border-radius: 6px; display: block; margin: 16px auto; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .knit-body table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+    .knit-body th, .knit-body td { border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; }
+    .knit-body th { background: #f1f5f9; font-weight: 600; }
+    .knit-body tr:nth-child(even) { background: #f8fafc; }
+    .knit-body pre { background: #f1f5f9; padding: 12px 16px; border-radius: 6px; overflow-x: auto; border: 1px solid #e2e8f0; font-size: 13.5px; }
+    .knit-body code { background: #f1f5f9; padding: 2px 5px; border-radius: 4px; font-family: monospace; font-size: 0.9em; }
+    .knit-body blockquote { border-left: 4px solid var(--accent); margin: 16px 0; padding: 4px 16px; color: #475569; background: #f8fafc; }
+
+    /* Columna Derecha: Metadatos, Opciones y Exportación */
+    .meta-section { display: flex; flex-direction: column; gap: 7px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+    .meta-section h4 { margin: 0 0 3px 0; font-size: 11px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px; }
     .btn-row { display: flex; gap: 6px; }
     .btn-row button { flex: 1; }
     #images-drawer {
       display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px;
-      max-height: 220px; overflow-y: auto; margin-top: 4px;
+      max-height: 200px; overflow-y: auto; margin-top: 4px;
     }
     #images-drawer img {
-      width: 100%; height: 70px; object-fit: cover; border-radius: 4px;
+      width: 100%; height: 65px; object-fit: cover; border-radius: 4px;
       border: 1px solid var(--border); cursor: pointer; background: #fff;
     }
 
+    /* --- Barra Inferior Conmutable (Inicialmente Oculta) y Botón Sutil --- */
+    #bottom-nav {
+      position: fixed; bottom: 0; left: 0; right: 0; height: 48px;
+      padding-bottom: env(safe-area-inset-bottom);
+      background: var(--bg-elevated); backdrop-filter: blur(12px);
+      border-top: 1px solid var(--border);
+      display: flex; justify-content: space-around; align-items: center;
+      z-index: 30; transform: translateY(105%);
+      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    #bottom-nav.visible { transform: translateY(0); }
+    #bottom-nav button {
+      background: transparent; border: none; font-size: 13px;
+      padding: 6px 10px; color: var(--text-normal);
+    }
+    #bottom-nav button:hover { color: var(--accent); }
+
+    #btn-toggle-bottom-bar {
+      position: fixed; bottom: 6px; left: 50%; transform: translateX(-50%);
+      z-index: 31; background: var(--bg-secondary); color: var(--text-muted);
+      border: 1px solid var(--border); border-radius: 12px; padding: 2px 12px;
+      font-size: 10px; opacity: 0.55; transition: opacity 0.2s, bottom 0.25s;
+    }
+    #btn-toggle-bottom-bar:hover { opacity: 1; color: var(--text-normal); }
+    #btn-toggle-bottom-bar.bar-open { bottom: 54px; opacity: 0.9; }
+
+    /* Barra Contextual sobre el Teclado Virtual (Móvil) */
+    #keyboard-toolbar {
+      position: fixed; left: 0; right: 0;
+      bottom: var(--kb-offset, 0px);
+      height: 44px; background: var(--bg-secondary);
+      border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 6px; padding: 0 10px;
+      overflow-x: auto; white-space: nowrap; z-index: 35;
+      scrollbar-width: none;
+    }
+    #keyboard-toolbar::-webkit-scrollbar { display: none; }
+    #keyboard-toolbar.hidden { display: none !important; }
+    #keyboard-toolbar button { flex: 0 0 auto; padding: 5px 10px; font-size: 13px; }
+
     .mobile-only { display: none !important; }
     #drawer-backdrop { display: none; }
-    #keyboard-toolbar.hidden { display: none !important; }
 
     /* ====================================================================
-       MEDIA QUERY MÓVIL: PWA ESTILO OBSIDIAN (< 768px)
+       MEDIA QUERY MÓVIL (< 768px)
        ==================================================================== */
     @media (max-width: 768px) {
       .desktop-only { display: none !important; }
-      .mobile-only { display: flex !important; }
+      .mobile-only { display: inline-flex !important; }
 
       #app-workspace {
         display: block; position: relative;
-        height: 100dvh; padding-top: var(--header-h); padding-bottom: var(--bottom-nav-h);
+        height: 100dvh; padding-top: var(--header-h);
       }
-      body.bars-hidden #app-workspace { padding-top: 0; padding-bottom: 0; }
+      body.bars-hidden #app-workspace { padding-top: 0; }
 
-      #editor-container, #map-container { width: 100% !important; height: 100%; border: none; }
-      #center-stage[data-mobile-view="editor"] #map-container { display: none !important; }
-      #center-stage[data-mobile-view="map"] #editor-container { display: none !important; }
+      #editor-container, #viewer-container { width: 100% !important; height: 100%; border: none; }
+      #center-stage[data-mobile-view="editor"] #viewer-container { display: none !important; }
+      #center-stage[data-mobile-view="viewer"] #editor-container { display: none !important; }
 
-      /* Cajones Deslizantes Superpuestos (Sidebars) */
       .drawer {
         position: fixed; top: 0; bottom: 0; width: 82vw; max-width: 310px;
         z-index: 50; box-shadow: 0 10px 35px rgba(0,0,0,0.6);
@@ -232,44 +311,13 @@
       }
       #drawer-backdrop.visible { opacity: 1; pointer-events: auto; }
 
-      /* Barra Inferior para Una Sola Mano */
-      #bottom-nav {
-        position: fixed; bottom: 0; left: 0; right: 0;
-        height: var(--bottom-nav-h); padding-bottom: env(safe-area-inset-bottom);
-        background: var(--bg-elevated); backdrop-filter: blur(12px);
-        border-top: 1px solid var(--border);
-        justify-content: space-around; align-items: center; z-index: 20;
-        transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-      }
-      body.bars-hidden #bottom-nav { transform: translateY(100%); }
-      #bottom-nav button {
-        background: transparent; border: none; font-size: 18px;
-        padding: 8px 12px; color: var(--text-normal);
-      }
-
-      /* Barra Contextual Flotante sobre el Teclado Virtual */
-      #keyboard-toolbar {
-        position: fixed; left: 0; right: 0;
-        bottom: var(--kb-offset, 0px);
-        height: 44px; background: var(--bg-secondary);
-        border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
-        display: flex; align-items: center; gap: 6px; padding: 0 10px;
-        overflow-x: auto; white-space: nowrap; z-index: 35;
-        scrollbar-width: none;
-      }
-      #keyboard-toolbar::-webkit-scrollbar { display: none; }
-      #keyboard-toolbar button {
-        flex: 0 0 auto; padding: 5px 10px; font-size: 13px;
-        background: var(--bg-primary); border: 1px solid var(--border);
-      }
+      #knit-toc { display: none; }
+      #knit-content { padding: 20px 16px; }
     }
   </style>
 </head>
 <body>
 
-  <!-- ====================================================================
-       PUNTO 2: ESTRUCTURA HTML SEMÁNTICA (OBSIDIAN LAYOUT)
-       ==================================================================== -->
   <div id="pull-indicator">↓ Suelta para abrir Paleta de Comandos</div>
 
   <div id="command-palette-backdrop" class="hidden">
@@ -281,28 +329,36 @@
 
   <!-- Barra Superior -->
   <header id="app-header">
-    <div class="header-left">
+    <div class="header-group">
       <button id="btn-left-drawer" class="icon-btn" title="Mostrar/Ocultar Archivos">📁</button>
       <span id="active-file-breadcrumb">doc.md</span>
       <span id="save-status" class="saved">Guardado</span>
     </div>
-    <div class="header-right">
-      <button id="btn-toggle-editor-desktop" class="desktop-only active" title="Mostrar/Ocultar Editor en Escritorio">⇄ Editor</button>
-      <button id="btn-switch-view" class="mobile-only primary" title="Alternar Texto / Mapa">🗺️ Mapa</button>
+
+    <div class="header-group">
+      <button id="btn-toggle-editor-desktop" class="desktop-only active" title="Mostrar/Ocultar Editor">⇄ Editor</button>
+      <button id="btn-switch-mobile" class="mobile-only primary" title="Alternar entre Editor y Visor">🗺️ Ver Salida</button>
+      <button id="btn-view-mode" class="primary" title="Cambiar salida en vivo entre Mapa Mental y Documento Maquetado (Knit)">📄 Vista Doc / Knit</button>
+      <button id="btn-fit" class="desktop-only" title="Encajar mapa">⊡ Ajustar</button>
+      <button id="btn-solid-color" class="desktop-only" title="Color sólido por rama">Color sólido</button>
+      <button id="btn-wrap-text" class="desktop-only" title="Ajustar ancho de texto">Ajustar texto</button>
+    </div>
+
+    <div class="header-group">
       <button id="btn-theme" class="icon-btn" title="Cambiar Tema Claro/Oscuro">🌓</button>
-      <button id="btn-cmd-top" class="icon-btn" title="Paleta de Comandos (Pull-down)">⚡</button>
-      <button id="btn-right-drawer" class="icon-btn" title="Opciones y Metadatos">⚙️</button>
+      <button id="btn-cmd-top" class="icon-btn" title="Paleta de Comandos">⚡</button>
+      <button id="btn-right-drawer" class="icon-btn" title="Opciones y Exportación">⚙️</button>
     </div>
   </header>
 
-  <!-- Escenario de 3 Columnas -->
+  <!-- Área de Trabajo de 3 Columnas -->
   <main id="app-workspace">
     <div id="drawer-backdrop"></div>
 
     <!-- 1. Columna Izquierda: Explorador de Archivos y Tags -->
     <aside id="left-sidebar" class="drawer">
       <div class="sb-section">
-        <input type="text" id="sb-search" placeholder="🔍 Buscar nota o carpeta..."/>
+        <input type="text" id="sb-search" placeholder="🔍 Buscar nota o #tag..."/>
         <div id="sb-tags"></div>
       </div>
       <div id="sb-tree"></div>
@@ -313,27 +369,31 @@
       </div>
     </aside>
 
-    <!-- 2. Columna Central: Editor Markdown y Mapa Mental -->
+    <!-- 2. Columna Central: Editor Markdown + Visor Dual (Mapa / Knit) -->
     <section id="center-stage" data-mobile-view="editor">
       <div id="editor-container" class="readable-line-length">
         <textarea id="markdown"></textarea>
       </div>
       <div id="resizer" class="desktop-only"></div>
-      <div id="map-container">
+      <div id="viewer-container">
         <svg id="mindmap"></svg>
+        <div id="knit-viewer">
+          <nav id="knit-toc"><h4>Contenido</h4><div id="knit-toc-list"></div></nav>
+          <div id="knit-content"><article class="knit-body" id="knit-body"></article></div>
+        </div>
       </div>
     </section>
 
-    <!-- 3. Columna Derecha: Metadatos, Opciones del Mapa e Imágenes -->
+    <!-- 3. Columna Derecha: Opciones del Mapa, Imágenes y Exportación -->
     <aside id="right-sidebar" class="drawer">
       <div class="meta-section">
-        <h4>Visualización del Mapa</h4>
-        <button id="btn-fit">⊡ Encajar mapa en pantalla</button>
+        <h4>Opciones de Visualización</h4>
+        <button id="btn-fit-side">⊡ Encajar mapa en pantalla</button>
         <button id="btn-autofit">Auto-Fit al escribir</button>
-        <button id="btn-solid-color">Color sólido por rama</button>
-        <button id="btn-wrap-text">Ajustar ancho de texto</button>
+        <button id="btn-solid-side">Color sólido por rama</button>
+        <button id="btn-wrap-side">Ajustar ancho de nodo</button>
         <button id="btn-expand-level">Nivel máx. desplegado</button>
-        <button id="btn-line-width">Ancho lectura confortable</button>
+        <button id="btn-line-width" class="active">Ancho lectura confortable</button>
       </div>
 
       <div class="meta-section">
@@ -349,16 +409,20 @@
 
       <div class="meta-section">
         <h4>Acciones y Exportación</h4>
-        <button id="btn-open-url">🌐 Cargar desde URL</button>
+        <button id="btn-open-url">🌐 Cargar Markdown desde URL</button>
         <div class="btn-row">
-          <button id="export-svg">↓ SVG</button>
-          <button id="export-html" class="primary">↓ HTML</button>
+          <button id="export-svg" title="Descargar Mapa en SVG">↓ SVG</button>
+          <button id="export-html" title="Descargar Mapa Interactivo HTML">↓ Mapa HTML</button>
+        </div>
+        <div class="btn-row">
+          <button id="export-knit" class="primary" title="Descargar Documento HTML estilo RStudio Knit">↓ Knit HTML</button>
+          <button id="export-pdf" class="primary" title="Generar PDF estilo LaTeX">↓ PDF</button>
         </div>
       </div>
     </aside>
   </main>
 
-  <!-- Barra Contextual de Edición sobre el Teclado Virtual (Móvil) -->
+  <!-- Barra Contextual sobre el Teclado Virtual (Móvil) -->
   <div id="keyboard-toolbar" class="hidden">
     <button data-insert="**|**"><b>B</b></button>
     <button data-insert="*|*"><i>I</i></button>
@@ -373,14 +437,15 @@
     <button id="kb-close">⌨️↓</button>
   </div>
 
-  <!-- Barra de Navegación Inferior (Móvil - Una Sola Mano) -->
-  <nav id="bottom-nav" class="mobile-only">
-    <button id="nav-back" title="Nota anterior">←</button>
-    <button id="nav-forward" title="Nota siguiente">→</button>
-    <button id="nav-files" title="Explorador de archivos">📁</button>
-    <button id="nav-toggle-view" title="Alternar Editor / Mapa">🗺️</button>
-    <button id="nav-cmd" title="Paleta de comandos">⚡</button>
-    <button id="nav-meta" title="Opciones y Metadatos">⚙️</button>
+  <!-- Botón Sutil y Barra Inferior Conmutable (Inicialmente Desactivada) -->
+  <button id="btn-toggle-bottom-bar" title="Mostrar/Ocultar barra rápida inferior">⌃ Barra</button>
+  <nav id="bottom-nav">
+    <button id="nav-undo" title="Deshacer cambio en editor (o ir a nota anterior)">↩ Deshacer</button>
+    <button id="nav-redo" title="Rehacer cambio en editor (o ir a nota siguiente)">↪ Rehacer</button>
+    <button id="nav-files" title="Abrir/Cerrar Archivos">📁 Archivos</button>
+    <button id="nav-view" title="Alternar Vista Mapa / Vista Doc Knit">📄/🗺️ Modo</button>
+    <button id="nav-cmd" title="Paleta de Comandos">⚡ Comandos</button>
+    <button id="nav-meta" title="Abrir/Cerrar Opciones">⚙️ Opciones</button>
   </nav>
 
   <!-- Librerías Locales -->
@@ -393,9 +458,6 @@
   <script src="/assets/continuelist.js"></script>
   <script src="/assets/placeholder.js"></script>
 
-  <!-- ====================================================================
-       PUNTO 4: LÓGICA UNIFICADA (MARKMAP + GESTOS OBSIDIAN + PWA)
-       ==================================================================== -->
   <script>
   (async function(){
     if ('serviceWorker' in navigator) {
@@ -413,7 +475,7 @@
     const tbEl = tb.render();
     tbEl.querySelector('.mm-toolbar-brand')?.remove();
     Object.assign(tbEl.style, { position: 'absolute', bottom: '16px', right: '16px', zIndex: 10 });
-    document.getElementById('map-container').appendChild(tbEl);
+    document.getElementById('viewer-container').appendChild(tbEl);
 
     const cm = CodeMirror.fromTextArea(document.getElementById('markdown'), {
       mode: 'markdown',
@@ -423,11 +485,11 @@
       placeholder: 'Escribe tu nota en Markdown aquí…'
     });
 
-    // Estado e historial de navegación de notas
     let currentFile = 'doc.md';
     let contentCache = '';
     let saveTimer = null;
     let isLoadingFile = false;
+    let isKnitView = false;
     let allFiles = [];
     let activeTag = null;
     const navHistory = [];
@@ -494,6 +556,45 @@
       return derived;
     }
 
+    // --- Compilador de Documento Maquetado (Estilo RStudio Knit + KaTeX + TOC) ---
+    function compileKnitHtml(rawMd) {
+      let cleanMd = rawMd.replace(/^---\n([\s\S]*?)\n---\n?/, '');
+      const mathBlocks = [];
+
+      cleanMd = cleanMd.replace(/\$\$([\s\S]+?)\$\$/g, (_, tex) => {
+        const html = window.katex ? katex.renderToString(tex.trim(), { displayMode: true, throwOnError: false }) : `$$${tex}$$`;
+        mathBlocks.push(html);
+        return `@@MATH_BLOCK_${mathBlocks.length - 1}@@`;
+      });
+      cleanMd = cleanMd.replace(/\$([^\$\n]+?)\$/g, (_, tex) => {
+        const html = window.katex ? katex.renderToString(tex.trim(), { displayMode: false, throwOnError: false }) : `$${tex}$`;
+        mathBlocks.push(html);
+        return `@@MATH_BLOCK_${mathBlocks.length - 1}@@`;
+      });
+
+      let bodyHtml = window.marked ? marked.parse(cleanMd) : cleanMd;
+      bodyHtml = bodyHtml.replace(/@@MATH_BLOCK_(\d+)@@/g, (_, idx) => mathBlocks[Number(idx)]);
+
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = bodyHtml;
+      const tocItems = [];
+      tempDiv.querySelectorAll('h1, h2, h3').forEach((h, i) => {
+        const id = `sec-${i}`;
+        h.id = id;
+        const level = h.tagName.toLowerCase();
+        tocItems.push(`<a href="#${id}" class="toc-${level}">${h.textContent}</a>`);
+      });
+
+      return { bodyHtml: tempDiv.innerHTML, tocHtml: tocItems.join('') };
+    }
+
+    function updateKnitPreview() {
+      if (!isKnitView) return;
+      const { bodyHtml, tocHtml } = compileKnitHtml(cm.getValue());
+      document.getElementById('knit-body').innerHTML = bodyHtml;
+      document.getElementById('knit-toc-list').innerHTML = tocHtml || '<small style="color:#94a3b8">Sin encabezados</small>';
+    }
+
     async function render(forceFit = false) {
       const md = cm.getValue();
 
@@ -512,20 +613,23 @@
         }, 500);
       }
 
-      const { root, features } = transformer.transform(md);
-      const { styles, scripts } = transformer.getUsedAssets(features);
-      if (styles && loadCSS) loadCSS(styles);
-      if (scripts && loadJS) await loadJS(scripts, { getMarkmap: () => window.markmap });
+      if (isKnitView) {
+        updateKnitPreview();
+      } else {
+        const { root, features } = transformer.transform(md);
+        const { styles, scripts } = transformer.getUsedAssets(features);
+        if (styles && loadCSS) loadCSS(styles);
+        if (scripts && loadJS) await loadJS(scripts, { getMarkmap: () => window.markmap });
 
-      const opts = getMarkmapOptions();
-      mm.setOptions(opts);
-      mm.setData(root, opts);
+        const opts = getMarkmapOptions();
+        mm.setOptions(opts);
+        mm.setData(root, opts);
 
-      if (forceFit || state.autoFit) {
-        requestAnimationFrame(() => mm.fit());
+        if (forceFit || state.autoFit) {
+          requestAnimationFrame(() => mm.fit());
+        }
       }
 
-      // Miniaturas en el panel derecho
       const drawer = document.getElementById('images-drawer');
       const imgPaths = extractImagePaths(md);
       drawer.innerHTML = '';
@@ -539,7 +643,21 @@
     }
 
     cm.on('change', () => render(false));
-    if (window.ResizeObserver) new ResizeObserver(() => mm.fit()).observe(svgEl);
+    if (window.ResizeObserver) new ResizeObserver(() => { if (!isKnitView) mm.fit(); }).observe(svgEl);
+
+    // --- Alternar entre Mapa Mental y Documento Maquetado (Knit) ---
+    function toggleViewMode() {
+      isKnitView = !isKnitView;
+      const knitEl = document.getElementById('knit-viewer');
+      const btnMode = document.getElementById('btn-view-mode');
+      knitEl.classList.toggle('active', isKnitView);
+      svgEl.classList.toggle('hidden', isKnitView);
+      tbEl.style.display = isKnitView ? 'none' : '';
+      btnMode.textContent = isKnitView ? '🗺️ Vista Mapa' : '📄 Vista Doc / Knit';
+      render(true);
+    }
+    document.getElementById('btn-view-mode').onclick = toggleViewMode;
+    document.getElementById('nav-view').onclick = toggleViewMode;
 
     // --- Gestión de Archivos y Árbol Lateral ---
     async function refreshSidebarMetadata() {
@@ -627,20 +745,13 @@
       const content = await fetch(`/api/content?file=${encodeURIComponent(filename)}`).then(r => r.text());
       contentCache = content;
       cm.setValue(content);
+      cm.clearHistory();
       isLoadingFile = false;
       setStatus('Guardado', 'saved');
       await render(true);
     }
 
     document.getElementById('sb-search').oninput = renderSidebar;
-
-    // Historial Atrás / Adelante (Barra inferior móvil)
-    document.getElementById('nav-back').onclick = () => {
-      if (navIndex > 0) { navIndex--; loadDocument(navHistory[navIndex], false); renderSidebar(); }
-    };
-    document.getElementById('nav-forward').onclick = () => {
-      if (navIndex < navHistory.length - 1) { navIndex++; loadDocument(navHistory[navIndex], false); renderSidebar(); }
-    };
 
     document.getElementById('btn-new-file').onclick = async () => {
       let name = prompt('Nombre del nuevo archivo (ej. clinica/insulina.md):');
@@ -661,10 +772,8 @@
       if (currentFile === 'doc.md') return alert('El archivo base doc.md no se puede renombrar.');
       const newName = prompt('Nuevo nombre o ruta (ej. clinica/protocolo.md):', currentFile);
       if (!newName || newName === currentFile) return;
-      const res = await fetch('/api/rename', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ oldName: currentFile, newName })
+      const res = await fetch(`/api/rename?old=${encodeURIComponent(currentFile)}&new=${encodeURIComponent(newName)}`, {
+        method: 'POST'
       });
       if (res.ok) {
         const updatedPath = await res.text();
@@ -743,7 +852,7 @@
         backdrop.classList.toggle('visible', isOpen);
       } else {
         workspace.classList.toggle('hide-left');
-        setTimeout(() => mm.fit(), 260);
+        setTimeout(() => { if (!isKnitView) mm.fit(); }, 220);
       }
     }
 
@@ -754,7 +863,7 @@
         backdrop.classList.toggle('visible', isOpen);
       } else {
         workspace.classList.toggle('hide-right');
-        setTimeout(() => mm.fit(), 260);
+        setTimeout(() => { if (!isKnitView) mm.fit(); }, 220);
       }
     }
 
@@ -763,25 +872,24 @@
     document.getElementById('btn-right-drawer').onclick = toggleRightSidebar;
     document.getElementById('nav-meta').onclick = toggleRightSidebar;
 
-    // Alternar Vista en Móvil (Editor <-> Mapa) y en Escritorio
+    // Alternar Vista en Móvil (Editor <-> Visor) y en Escritorio
     const centerStage = document.getElementById('center-stage');
-    const btnSwitchView = document.getElementById('btn-switch-view');
+    const btnSwitchMobile = document.getElementById('btn-switch-mobile');
     function switchMobileView() {
       const current = centerStage.dataset.mobileView;
-      const next = current === 'editor' ? 'map' : 'editor';
+      const next = current === 'editor' ? 'viewer' : 'editor';
       centerStage.dataset.mobileView = next;
-      btnSwitchView.textContent = next === 'editor' ? '🗺️ Mapa' : '✏️ Texto';
-      if (next === 'map') setTimeout(() => mm.fit(), 60);
+      btnSwitchMobile.textContent = next === 'editor' ? '🗺️ Ver Salida' : '✏️ Editar MD';
+      if (next === 'viewer') setTimeout(() => { if (!isKnitView) mm.fit(); else updateKnitPreview(); }, 60);
       else setTimeout(() => cm.refresh(), 60);
     }
-    btnSwitchView.onclick = switchMobileView;
-    document.getElementById('nav-toggle-view').onclick = switchMobileView;
+    btnSwitchMobile.onclick = switchMobileView;
 
     document.getElementById('btn-toggle-editor-desktop').onclick = function() {
       const ed = document.getElementById('editor-container');
       ed.classList.toggle('hidden');
       this.classList.toggle('active', !ed.classList.contains('hidden'));
-      setTimeout(() => mm.fit(), 50);
+      setTimeout(() => { if (!isKnitView) mm.fit(); }, 50);
     };
 
     document.getElementById('btn-theme').onclick = () => {
@@ -789,26 +897,39 @@
     };
 
     // --- Opciones de Markmap ---
-    document.getElementById('btn-fit').onclick = () => { mm.fit(); closeMobileDrawers(); };
+    const fitAction = () => { mm.fit(); closeMobileDrawers(); };
+    document.getElementById('btn-fit').onclick = fitAction;
+    document.getElementById('btn-fit-side').onclick = fitAction;
+
     document.getElementById('btn-autofit').onclick = function() {
       state.autoFit = !state.autoFit;
       this.classList.toggle('active', state.autoFit);
     };
-    document.getElementById('btn-solid-color').onclick = function() {
+
+    function toggleSolidColor() {
       state.colorFreezeLevel = state.colorFreezeLevel ? 0 : 2;
-      this.classList.toggle('active', state.colorFreezeLevel > 0);
+      document.getElementById('btn-solid-color').classList.toggle('active', state.colorFreezeLevel > 0);
+      document.getElementById('btn-solid-side').classList.toggle('active', state.colorFreezeLevel > 0);
       render(false);
-    };
-    document.getElementById('btn-wrap-text').onclick = function() {
+    }
+    document.getElementById('btn-solid-color').onclick = toggleSolidColor;
+    document.getElementById('btn-solid-side').onclick = toggleSolidColor;
+
+    function promptWrapText() {
       const current = state.maxWidth > 0 ? state.maxWidth : '';
       const input = prompt('Ancho máximo de nodo en píxeles (ej. 250, o vacío para desactivar):', current);
       if (input === null) return;
       const n = parseInt(input, 10);
       state.maxWidth = (isNaN(n) || n <= 0) ? 0 : n;
-      this.classList.toggle('active', state.maxWidth > 0);
-      this.textContent = state.maxWidth > 0 ? `Ancho: ${state.maxWidth}px` : 'Ajustar ancho de texto';
+      const label = state.maxWidth > 0 ? `Ancho: ${state.maxWidth}px` : 'Ajustar texto';
+      document.getElementById('btn-wrap-text').classList.toggle('active', state.maxWidth > 0);
+      document.getElementById('btn-wrap-side').classList.toggle('active', state.maxWidth > 0);
+      document.getElementById('btn-wrap-text').textContent = label;
       render(true);
-    };
+    }
+    document.getElementById('btn-wrap-text').onclick = promptWrapText;
+    document.getElementById('btn-wrap-side').onclick = promptWrapText;
+
     document.getElementById('btn-expand-level').onclick = function() {
       const current = state.expandLevel > 0 ? state.expandLevel : '';
       const input = prompt('Nivel máximo desplegado (vacío para todos):', current);
@@ -819,14 +940,47 @@
       this.textContent = state.expandLevel > 0 ? `Nivel máx: ${state.expandLevel}` : 'Nivel máx. desplegado';
       render(true);
     };
+
     document.getElementById('btn-line-width').onclick = function() {
       const ed = document.getElementById('editor-container');
       ed.classList.toggle('readable-line-length');
       this.classList.toggle('active', ed.classList.contains('readable-line-length'));
     };
+
     document.getElementById('btn-open-url').onclick = async () => {
       const url = prompt('Introduce la URL del archivo Markdown:');
       if (url) cm.setValue(await fetch(url).then(r => r.text()));
+    };
+
+    // --- Barra Inferior Conmutable y Botón Sutil ---
+    const bottomNav = document.getElementById('bottom-nav');
+    const btnToggleBottom = document.getElementById('btn-toggle-bottom-bar');
+    btnToggleBottom.onclick = () => {
+      const isVis = bottomNav.classList.toggle('visible');
+      btnToggleBottom.classList.toggle('bar-open', isVis);
+      btnToggleBottom.textContent = isVis ? '⌄ Ocultar' : '⌃ Barra';
+    };
+
+    // Deshacer / Rehacer en el editor (o navegar historial de notas si no hay cambios que deshacer)
+    document.getElementById('nav-undo').onclick = () => {
+      if (cm.historySize().undo > 0) {
+        cm.undo();
+        cm.focus();
+      } else if (navIndex > 0) {
+        navIndex--;
+        loadDocument(navHistory[navIndex], false);
+        renderSidebar();
+      }
+    };
+    document.getElementById('nav-redo').onclick = () => {
+      if (cm.historySize().redo > 0) {
+        cm.redo();
+        cm.focus();
+      } else if (navIndex < navHistory.length - 1) {
+        navIndex++;
+        loadDocument(navHistory[navIndex], false);
+        renderSidebar();
+      }
     };
 
     // --- Paleta de Comandos (Pull-Down Action) ---
@@ -835,13 +989,17 @@
     const cmdResults = document.getElementById('cmd-results');
 
     const commands = [
-      { name: '🗺️ Alternar Vista Editor / Mapa', action: () => switchMobileView() },
+      { name: '📄/🗺️ Alternar Salida: Mapa Mental / Documento Knit', action: () => toggleViewMode() },
+      { name: '📱 Alternar Editor / Visor (Móvil)', action: () => switchMobileView() },
       { name: '⊡ Encajar Mapa en Pantalla', action: () => mm.fit() },
-      { name: '🎨 Alternar Color Sólido por Rama', action: () => document.getElementById('btn-solid-color').click() },
-      { name: '📏 Configurar Ancho de Texto en Nodos', action: () => document.getElementById('btn-wrap-text').click() },
+      { name: '🎨 Alternar Color Sólido por Rama', action: () => toggleSolidColor() },
+      { name: '📏 Configurar Ancho de Texto en Nodos', action: () => promptWrapText() },
       { name: '🌓 Cambiar Tema Oscuro / Claro', action: () => document.body.classList.toggle('theme-light') },
       { name: '➕ Crear Nueva Nota Markdown', action: () => document.getElementById('btn-new-file').click() },
-      { name: '⬇️ Exportar Mapa a HTML Autónomo', action: () => document.getElementById('export-html').click() },
+      { name: '✏️ Renombrar Nota Actual', action: () => document.getElementById('btn-rename-file').click() },
+      { name: '⬇️ Exportar Documento HTML Estilo RStudio Knit (con TOC)', action: () => document.getElementById('export-knit').click() },
+      { name: '⬇️ Exportar Documento a PDF Estilo LaTeX', action: () => document.getElementById('export-pdf').click() },
+      { name: '⬇️ Exportar Mapa Interactivo a HTML', action: () => document.getElementById('export-html').click() },
       { name: '⬇️ Exportar Mapa a SVG', action: () => document.getElementById('export-svg').click() }
     ];
 
@@ -903,38 +1061,23 @@
       if (window.innerWidth > 768) return;
       const dx = e.changedTouches[0].clientX - touchStartX;
       const dy = e.changedTouches[0].clientY - touchStartY;
-      const isMap = centerStage.dataset.mobileView === 'map';
+      const isViewer = centerStage.dataset.mobileView === 'viewer';
 
-      // Swipe horizontal
       if (Math.abs(dx) > 75 && Math.abs(dx) > Math.abs(dy) * 1.8) {
-        if (dx > 0 && (touchStartX < 45 || !isMap) && !rightDrawer.classList.contains('open')) {
+        if (dx > 0 && (touchStartX < 45 || !isViewer) && !rightDrawer.classList.contains('open')) {
           leftDrawer.classList.add('open');
           backdrop.classList.add('visible');
-        } else if (dx < 0 && (touchStartX > window.innerWidth - 45 || !isMap) && !leftDrawer.classList.contains('open')) {
+        } else if (dx < 0 && (touchStartX > window.innerWidth - 45 || !isViewer) && !leftDrawer.classList.contains('open')) {
           rightDrawer.classList.add('open');
           backdrop.classList.add('visible');
         } else {
           closeMobileDrawers();
         }
       }
-      // Pull-down superior -> Paleta de comandos
       if (dy > 95 && Math.abs(dy) > Math.abs(dx) * 2 && touchStartY < 75) {
         openCommandPalette();
       }
     }, { passive: true });
-
-    // --- Autohide en Scroll (Lectura Inmersiva) ---
-    let lastScrollTop = 0;
-    cm.on('scroll', (instance) => {
-      if (window.innerWidth > 768) return;
-      const st = instance.getScrollInfo().top;
-      if (st > lastScrollTop + 18 && st > 60) {
-        document.body.classList.add('bars-hidden');
-      } else if (st < lastScrollTop - 12 || st <= 10) {
-        document.body.classList.remove('bars-hidden');
-      }
-      lastScrollTop = st <= 0 ? 0 : st;
-    });
 
     // --- Barra Contextual sobre el Teclado Virtual ---
     const kbToolbar = document.getElementById('keyboard-toolbar');
@@ -962,9 +1105,7 @@
           const [prefix, suffix] = tpl.split('|');
           const cursor = doc.getCursor();
           doc.replaceSelection(`${prefix}${sel}${suffix}`);
-          if (!sel) {
-            doc.setCursor({ line: cursor.line, ch: cursor.ch + prefix.length });
-          }
+          if (!sel) doc.setCursor({ line: cursor.line, ch: cursor.ch + prefix.length });
         } else {
           doc.replaceSelection(`${tpl}${sel}`);
         }
@@ -988,18 +1129,18 @@
       const onUp = () => {
         window.removeEventListener('mousemove', onMove);
         window.removeEventListener('mouseup', onUp);
-        mm.fit();
+        if (!isKnitView) mm.fit();
       };
       window.addEventListener('mousemove', onMove);
       window.addEventListener('mouseup', onUp);
     });
 
-    // --- Exportar SVG y HTML ---
+    // --- 4 Motores de Exportación: SVG, Mapa HTML, Knit HTML y PDF LaTeX ---
     document.getElementById('export-svg').onclick = async () => {
       const cloneSvg = svgEl.cloneNode(true);
       cloneSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-      cloneSvg.setAttribute('width', svgEl.clientWidth);
-      cloneSvg.setAttribute('height', svgEl.clientHeight);
+      cloneSvg.setAttribute('width', svgEl.clientWidth || 1200);
+      cloneSvg.setAttribute('height', svgEl.clientHeight || 800);
       const imgs = cloneSvg.querySelectorAll('img');
       for (const img of imgs) {
         const src = img.getAttribute('src');
@@ -1032,14 +1173,106 @@
         maxWidth: state.maxWidth > 0 ? state.maxWidth : 0,
         initialExpandLevel: state.expandLevel
       });
-      const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>${currentFile}</title><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"/><style>*{margin:0;padding:0;box-sizing:border-box}html,body,#mindmap{width:100vw;height:100vh;display:block;font-family:sans-serif}svg#mindmap img{max-height:160px;width:auto;border-radius:4px;display:block;margin:4px 0}.mm-toolbar-brand{display:none!important}${cssTB}</style></head><body><svg id="mindmap"></svg><script>${d3js}<\/script><script>${libjs}<\/script><script>${viewjs}<\/script><script>${jsTB}<\/script><script>(async function(){const{Transformer,Markmap,Toolbar,loadCSS,loadJS,deriveOptions}=window.markmap;const transformer=new Transformer();const svgEl=document.getElementById("mindmap");const rawOpts=${exportOptions};const opts=deriveOptions?deriveOptions(rawOpts):rawOpts;const mm=Markmap.create(svgEl,opts);const{root,features}=transformer.transform(${JSON.stringify(embeddedMd)});const{styles,scripts}=transformer.getUsedAssets(features);if(styles&&loadCSS)loadCSS(styles);if(scripts&&loadJS)await loadJS(scripts,{getMarkmap:()=>window.markmap});mm.setData(root,opts);setTimeout(()=>mm.fit(),50);window.addEventListener("resize",()=>mm.fit());const tb=new Toolbar();if(tb.setBrand)tb.setBrand(false);tb.attach(mm);const el=tb.render();el.querySelector(".mm-toolbar-brand")?.remove();Object.assign(el.style,{position:"absolute",bottom:"20px",right:"20px"});document.body.appendChild(el);})();<\/script></body></html>`;
+      const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>${currentFile}</title><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"/><script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"><\/script><style>*{margin:0;padding:0;box-sizing:border-box}html,body,#mindmap{width:100vw;height:100vh;display:block;font-family:sans-serif}svg#mindmap img{max-height:160px;width:auto;border-radius:4px;display:block;margin:4px 0}.mm-toolbar-brand{display:none!important}${cssTB}</style></head><body><svg id="mindmap"></svg><script>${d3js}<\/script><script>${libjs}<\/script><script>${viewjs}<\/script><script>${jsTB}<\/script><script>(async function(){const{Transformer,Markmap,Toolbar,loadCSS,loadJS,deriveOptions}=window.markmap;const transformer=new Transformer();const svgEl=document.getElementById("mindmap");const rawOpts=${exportOptions};const opts=deriveOptions?deriveOptions(rawOpts):rawOpts;const mm=Markmap.create(svgEl,opts);const{root,features}=transformer.transform(${JSON.stringify(embeddedMd)});const{styles,scripts}=transformer.getUsedAssets(features);if(styles&&loadCSS)loadCSS(styles);if(scripts&&loadJS)await loadJS(scripts,{getMarkmap:()=>window.markmap});mm.setData(root,opts);setTimeout(()=>mm.fit(),50);window.addEventListener("resize",()=>mm.fit());const tb=new Toolbar();if(tb.setBrand)tb.setBrand(false);tb.attach(mm);const el=tb.render();el.querySelector(".mm-toolbar-brand")?.remove();Object.assign(el.style,{position:"absolute",bottom:"20px",right:"20px"});document.body.appendChild(el);})();<\/script></body></html>`;
       const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${currentFile.replace('.md', '').replace(/\//g, '_')}.html`;
+      a.download = `${currentFile.replace('.md', '').replace(/\//g, '_')}_mapa.html`;
       a.click();
       URL.revokeObjectURL(url);
+    };
+
+    document.getElementById('export-knit').onclick = async () => {
+      const embeddedMd = await embedImagesInMarkdown(cm.getValue());
+      const { bodyHtml, tocHtml } = compileKnitHtml(embeddedMd);
+      const title = currentFile.replace('.md', '').split('/').pop();
+
+      const knitDoc = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>${title} - Documento Knit</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"/>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #2c3e50; background: #fff; display: flex; }
+    nav#toc { width: 260px; position: fixed; top: 0; bottom: 0; left: 0; overflow-y: auto; background: #f8fafc; border-right: 1px solid #e2e8f0; padding: 24px 16px; }
+    nav#toc h4 { margin: 0 0 12px 0; font-size: 12px; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px; }
+    nav#toc a { display: block; color: #475569; text-decoration: none; padding: 6px 10px; border-radius: 5px; font-size: 13.5px; margin-bottom: 2px; }
+    nav#toc a:hover { background: #e2e8f0; color: #0f172a; }
+    nav#toc a.toc-h2 { padding-left: 22px; font-size: 13px; }
+    nav#toc a.toc-h3 { padding-left: 34px; font-size: 12px; color: #64748b; }
+    main { margin-left: 260px; flex: 1; padding: 40px 56px; max-width: 960px; line-height: 1.75; font-size: 16px; }
+    h1 { border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; color: #0f172a; }
+    h2 { border-bottom: 1px solid #f1f5f9; padding-bottom: 6px; margin-top: 1.8em; color: #1e293b; }
+    img { max-width: 100%; height: auto; border-radius: 6px; display: block; margin: 20px auto; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+    table { border-collapse: collapse; width: 100%; margin: 20px 0; }
+    th, td { border: 1px solid #cbd5e1; padding: 10px 14px; text-align: left; }
+    th { background: #f1f5f9; }
+    tr:nth-child(even) { background: #f8fafc; }
+    pre { background: #f1f5f9; padding: 14px; border-radius: 6px; overflow-x: auto; border: 1px solid #e2e8f0; }
+    code { background: #f1f5f9; padding: 2px 5px; border-radius: 4px; font-family: monospace; }
+    blockquote { border-left: 4px solid #3b82f6; margin: 16px 0; padding: 6px 18px; background: #f8fafc; color: #475569; }
+    @media (max-width: 768px) { nav#toc { display: none; } main { margin-left: 0; padding: 20px; } }
+  </style>
+</head>
+<body>
+  <nav id="toc"><h4>Índice de Contenidos</h4>${tocHtml}</nav>
+  <main>${bodyHtml}</main>
+</body>
+</html>`;
+
+      const blob = new Blob([knitDoc], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${currentFile.replace('.md', '').replace(/\//g, '_')}_knit.html`;
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+
+    document.getElementById('export-pdf').onclick = async () => {
+      const embeddedMd = await embedImagesInMarkdown(cm.getValue());
+      const { bodyHtml, tocHtml } = compileKnitHtml(embeddedMd);
+      const title = currentFile.replace('.md', '').split('/').pop();
+
+      const printWin = window.open('', '_blank');
+      printWin.document.write(`<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <title>${title}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"/>
+  <style>
+    @page { size: A4; margin: 22mm 20mm; }
+    body { font-family: "Latin Modern Roman", "Computer Modern", Georgia, "Times New Roman", serif; color: #000; line-height: 1.65; font-size: 11.5pt; max-width: 750px; margin: 0 auto; counter-reset: h2counter; }
+    h1 { text-align: center; font-size: 20pt; margin-bottom: 18pt; border-bottom: 1pt solid #000; padding-bottom: 8pt; }
+    h2 { font-size: 14pt; margin-top: 18pt; counter-increment: h2counter; counter-reset: h3counter; }
+    h2::before { content: counter(h2counter) ". "; }
+    h3 { font-size: 12pt; margin-top: 12pt; counter-increment: h3counter; }
+    h3::before { content: counter(h2counter) "." counter(h3counter) " "; }
+    img, table, pre, blockquote { page-break-inside: avoid; max-width: 100%; }
+    img { display: block; margin: 12pt auto; max-height: 260px; }
+    table { border-collapse: collapse; width: 100%; margin: 12pt 0; font-size: 10pt; border-top: 1.5pt solid #000; border-bottom: 1.5pt solid #000; }
+    th { border-bottom: 1pt solid #000; padding: 6pt 8pt; text-align: left; }
+    td { padding: 5pt 8pt; border-bottom: 0.5pt solid #ccc; }
+    pre { background: #f5f5f5; padding: 8pt; border: 0.5pt solid #ccc; font-size: 9.5pt; white-space: pre-wrap; }
+    .toc-box { border: 0.5pt solid #aaa; padding: 10pt 14pt; margin-bottom: 20pt; background: #fafafa; }
+    .toc-box h4 { margin: 0 0 6pt 0; font-size: 11pt; }
+    .toc-box a { display: block; color: #000; text-decoration: none; font-size: 10pt; padding: 2pt 0; }
+    .toc-box a.toc-h2 { padding-left: 12pt; }
+    .toc-box a.toc-h3 { padding-left: 24pt; }
+  </style>
+</head>
+<body>
+  <div class="toc-box"><h4>Índice</h4>${tocHtml}</div>
+  ${bodyHtml}
+  <script>window.onload = () => { setTimeout(() => { window.print(); }, 350); };<\/script>
+</body>
+</html>`);
+      printWin.document.close();
     };
 
     await loadFileList('doc.md');

@@ -8,3 +8,4 @@
 ## Sistema nervioso periférico
 - Nervios motores
 - Nervio sensitivos
+- [ ] nervios

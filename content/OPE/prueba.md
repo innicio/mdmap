@@ -1,3 +1,7 @@
+---
+tags: [cono, 5ºprimaria]
+---
+
 # Sistema nervioso
 ## Sistema nerviosos central
 - Encéfalo
