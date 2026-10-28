@@ -1,0 +1,21 @@
+# --- Dependencias de Node ---
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- Entorno de desarrollo local ---
+.env
+.DS_Store
+Thumbs.db
+
+# --- Datos de desarrollo (Notas Markdown e Imágenes locales) ---
+# Omitimos esto para que Git no suba tus documentos personales ni imágenes privadas a GitHub.
+# En producción/servidor se montarán mediante volúmenes de Docker (./content y ./images).
+content/*
+!content/doc.md
+images/*
+!.gitkeep
+
+# --- Docker ---
+.dockerignore

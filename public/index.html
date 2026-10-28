@@ -2,186 +2,388 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+  <meta name="theme-color" content="#1e1e1e"/>
   <title>Markmap Local Studio</title>
+  <link rel="manifest" href="/manifest.json"/>
   <link rel="stylesheet" href="/assets/codemirror.css"/>
   <link rel="stylesheet" href="/assets/markmap-toolbar.css"/>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"/>
+
+  <!-- ====================================================================
+       PUNTO 3: REGLAS CSS RESPONSIVAS Y TEMA OBSIDIAN (DARK/LIGHT)
+       ==================================================================== -->
   <style>
     :root {
-      --bg-bar: #1e293b;
-      --text-bar: #f8fafc;
-      --accent: #3b82f6;
-      --accent-hover: #2563eb;
-      --border: #cbd5e1;
-      --bg-panel: #f1f5f9;
+      --bg-primary: #1e1e1e;
+      --bg-secondary: #252526;
+      --bg-elevated: rgba(37, 37, 38, 0.92);
+      --text-normal: #dcddde;
+      --text-muted: #8e8e93;
+      --accent: #7f6df2;
+      --accent-hover: #6955e0;
+      --danger: #e11d48;
+      --border: #333333;
+      --header-h: 46px;
+      --bottom-nav-h: 54px;
+      --line-width: 68ch;
     }
-    * { box-sizing: border-box; }
-    html, body { margin: 0; height: 100vh; font-family: system-ui, -apple-system, sans-serif; overflow: hidden; }
-    body { display: flex; flex-direction: column; }
 
-    header {
-      height: 48px; background: var(--bg-bar); color: var(--text-bar);
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 0 14px; font-size: 13px; gap: 10px; user-select: none;
+    body.theme-light {
+      --bg-primary: #ffffff;
+      --bg-secondary: #f3f4f6;
+      --bg-elevated: rgba(243, 244, 246, 0.92);
+      --text-normal: #1e293b;
+      --text-muted: #64748b;
+      --border: #cbd5e1;
     }
-    .bar-group { display: flex; align-items: center; gap: 8px; overflow-x: auto; }
-    .brand { font-weight: 700; font-size: 15px; color: #60a5fa; margin-right: 6px; }
-    
-    select, button, input[type="number"] {
-      background: #334155; color: #f8fafc; border: 1px solid #475569;
-      padding: 5px 10px; border-radius: 5px; font-size: 12px; cursor: pointer;
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0; padding: 0; height: 100dvh;
+      background: var(--bg-primary); color: var(--text-normal);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      overflow: hidden; overscroll-behavior-y: none;
+    }
+
+    /* Botones e inputs generales */
+    button, select, input[type="text"] {
+      background: var(--bg-primary); color: var(--text-normal);
+      border: 1px solid var(--border); padding: 6px 10px;
+      border-radius: 6px; font-size: 12px; cursor: pointer;
       transition: background 0.15s, border-color 0.15s;
     }
-    select:hover, button:hover { background: #475569; }
-    button.active { background: var(--accent); border-color: #60a5fa; font-weight: 600; }
-    button.primary { background: var(--accent); border-color: var(--accent); font-weight: 600; }
-    button.primary:hover { background: var(--accent-hover); }
-    button.danger:hover { background: #dc2626; border-color: #ef4444; }
-
-    #save-status {
-      font-size: 11px; padding: 3px 8px; border-radius: 10px;
-      background: #0f172a; color: #94a3b8; min-width: 75px; text-align: center;
+    button:hover, select:hover { border-color: var(--accent); }
+    button.active, button.primary {
+      background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600;
     }
+    button.danger:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
+    .icon-btn { font-size: 15px; padding: 5px 9px; background: transparent; border-color: transparent; }
+    .icon-btn:hover { background: rgba(127, 109, 242, 0.15); }
+
+    /* Indicador Pull-Down y Paleta de Comandos Flotante */
+    #pull-indicator {
+      position: fixed; top: -40px; left: 50%; transform: translateX(-50%);
+      background: var(--accent); color: #fff; padding: 6px 16px;
+      border-radius: 20px; font-size: 12px; font-weight: 600;
+      z-index: 90; transition: top 0.2s; pointer-events: none;
+    }
+    #pull-indicator.visible { top: 12px; }
+
+    #command-palette-backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(3px); z-index: 100;
+      display: flex; justify-content: center; align-items: flex-start; padding-top: 12vh;
+    }
+    #command-palette-backdrop.hidden { display: none !important; }
+    #command-palette {
+      width: 90%; max-width: 520px; background: var(--bg-secondary);
+      border: 1px solid var(--border); border-radius: 10px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5); overflow: hidden;
+    }
+    #cmd-input {
+      width: 100%; border: none; border-bottom: 1px solid var(--border);
+      padding: 14px 16px; font-size: 15px; background: var(--bg-primary); outline: none; border-radius: 0;
+    }
+    #cmd-results { max-height: 55vh; overflow-y: auto; padding: 6px; }
+    .cmd-item {
+      padding: 10px 12px; border-radius: 6px; cursor: pointer;
+      display: flex; justify-content: space-between; font-size: 13px;
+    }
+    .cmd-item:hover { background: var(--accent); color: #fff; }
+
+    /* Cabecera Superior con Autohide */
+    #app-header {
+      height: var(--header-h); background: var(--bg-elevated);
+      backdrop-filter: blur(12px); border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 12px; position: fixed; top: 0; left: 0; right: 0; z-index: 20;
+      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    body.bars-hidden #app-header { transform: translateY(-100%); }
+    .header-left, .header-right { display: flex; align-items: center; gap: 8px; }
+    #active-file-breadcrumb { font-size: 13px; font-weight: 600; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #save-status { font-size: 11px; padding: 2px 7px; border-radius: 10px; }
     #save-status.saving { color: #fbbf24; }
     #save-status.saved { color: #34d399; }
 
-    #workspace {
-      flex: 1; display: flex; height: calc(100vh - 48px); position: relative;
+    /* Layout Base de Escritorio: 3 Columnas Fijas */
+    #app-workspace {
+      display: grid;
+      grid-template-columns: 240px 1fr 260px;
+      height: 100dvh; padding-top: var(--header-h);
+      transition: grid-template-columns 0.25s ease;
     }
+    #app-workspace.hide-left { grid-template-columns: 0px 1fr 260px; }
+    #app-workspace.hide-right { grid-template-columns: 240px 1fr 0px; }
+    #app-workspace.hide-left.hide-right { grid-template-columns: 0px 1fr 0px; }
 
-    /* Panel Lateral (Sidebar) de Archivos y Tags */
-    #sidebar {
-      width: 240px; min-width: 190px; background: #0f172a; color: #e2e8f0;
-      display: flex; flex-direction: column; border-right: 1px solid #334155; font-size: 13px;
+    .drawer {
+      background: var(--bg-secondary); border-right: 1px solid var(--border);
+      overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column;
+      transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
     }
-    #sidebar.hidden { display: none !important; }
-    .sb-section { padding: 10px; border-bottom: 1px solid #1e293b; }
-    #sb-search {
-      width: 100%; background: #1e293b; border: 1px solid #334155; color: #fff;
-      padding: 6px 8px; border-radius: 4px; font-size: 12px;
-    }
+    #right-sidebar { border-right: none; border-left: 1px solid var(--border); padding: 12px; gap: 16px; }
+
+    /* Columna Izquierda: Explorador y Tags */
+    .sb-section { padding: 10px; border-bottom: 1px solid var(--border); }
+    #sb-search { width: 100%; }
     #sb-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
     .tag-pill {
-      background: #1e293b; color: #94a3b8; padding: 2px 7px; border-radius: 10px;
-      font-size: 11px; cursor: pointer; border: 1px solid #334155;
+      background: var(--bg-primary); color: var(--text-muted); padding: 2px 8px;
+      border-radius: 10px; font-size: 11px; cursor: pointer; border: 1px solid var(--border);
     }
-    .tag-pill.active { background: var(--accent); color: #fff; border-color: #60a5fa; }
+    .tag-pill.active { background: var(--accent); color: #fff; border-color: var(--accent); }
     #sb-tree { flex: 1; overflow-y: auto; padding: 6px 0; }
     .folder-title {
-      padding: 5px 10px; font-weight: 600; color: #94a3b8; font-size: 11px;
-      text-transform: uppercase; letter-spacing: 0.5px; margin-top: 6px;
+      padding: 6px 12px; font-weight: 700; color: var(--text-muted);
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px;
     }
     .file-item {
-      padding: 6px 12px 6px 20px; cursor: pointer; display: flex;
-      justify-content: space-between; align-items: center; color: #cbd5e1;
+      padding: 7px 12px 7px 20px; cursor: pointer; display: flex;
+      justify-content: space-between; align-items: center; font-size: 13px; color: var(--text-normal);
     }
-    .file-item:hover { background: #1e293b; }
-    .file-item.active { background: #1e3a8a; color: #fff; font-weight: 500; border-left: 3px solid #60a5fa; }
-    .file-tags { font-size: 10px; color: #64748b; margin-left: 6px; }
+    .file-item:hover { background: rgba(127, 109, 242, 0.1); }
+    .file-item.active {
+      background: rgba(127, 109, 242, 0.2); color: #fff;
+      font-weight: 600; border-left: 3px solid var(--accent);
+    }
+    body.theme-light .file-item.active { color: var(--accent); }
+    .file-tags { font-size: 10px; color: var(--text-muted); margin-left: 6px; }
+    .sb-footer { padding: 10px; border-top: 1px solid var(--border); display: flex; gap: 6px; }
+    .sb-footer button { flex: 1; }
+    .sb-footer button.danger { flex: 0 0 36px; }
 
-    /* Panel del Editor */
-    #editor-pane {
-      width: 42%; min-width: 240px; max-width: 80%;
-      display: flex; flex-direction: column; border-right: 1px solid var(--border);
+    /* Columna Central: Editor + Mapa */
+    #center-stage { display: flex; height: 100%; overflow: hidden; position: relative; }
+    #editor-container {
+      width: 45%; min-width: 220px; height: 100%;
+      display: flex; flex-direction: column; background: var(--bg-primary);
+      border-right: 1px solid var(--border);
     }
-    #editor-pane.hidden { display: none !important; }
-    .CodeMirror { flex: 1; height: 100%; font-size: 14px; line-height: 1.5; font-family: 'Fira Code', 'Consolas', monospace; }
+    #editor-container.hidden { display: none !important; }
+    .CodeMirror {
+      flex: 1; height: 100%; font-size: 15px; line-height: 1.6;
+      background: var(--bg-primary) !important; color: var(--text-normal) !important;
+      font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
+    }
+    .CodeMirror-gutters { background: var(--bg-secondary) !important; border-right: 1px solid var(--border) !important; }
+    .CodeMirror-cursor { border-left: 2px solid var(--accent) !important; }
+    #editor-container.readable-line-length .CodeMirror-lines {
+      max-width: var(--line-width); margin: 0 auto; padding: 18px 12px;
+    }
 
-    #editor-footer {
-      background: var(--bg-panel); border-top: 1px solid var(--border);
-      padding: 6px 10px; display: flex; align-items: center; justify-content: space-between; font-size: 12px;
-    }
-    #editor-footer select, #editor-footer button {
-      background: #fff; color: #1e293b; border-color: var(--border);
-    }
-    #editor-footer button:hover { background: #e2e8f0; }
-
-    #resizer {
-      width: 5px; cursor: col-resize; background: #e2e8f0; transition: background 0.2s;
-    }
+    #resizer { width: 5px; cursor: col-resize; background: var(--border); transition: background 0.2s; }
     #resizer:hover { background: var(--accent); }
 
-    /* Panel de Previsualización */
-    #preview-pane {
-      flex: 1; display: flex; flex-direction: column; position: relative; background: #ffffff;
-    }
-    svg#mindmap { flex: 1; width: 100%; height: 100%; display: block; }
+    #map-container { flex: 1; height: 100%; position: relative; background: var(--bg-primary); }
+    svg#mindmap { width: 100%; height: 100%; display: block; color: var(--text-normal); }
     svg#mindmap img { max-height: 160px; width: auto; border-radius: 4px; display: block; margin: 4px 0; }
-
-    #images-drawer {
-      max-height: 170px; overflow-x: auto; overflow-y: hidden;
-      border-top: 1px solid var(--border); background: #f8fafc;
-      padding: 8px 12px; display: none; align-items: center; gap: 12px;
-    }
-    #images-drawer.visible { display: flex; }
-    #images-drawer img {
-      max-height: 145px; border-radius: 6px; border: 1px solid var(--border);
-      cursor: zoom-in; transition: transform 0.15s; background: #fff;
-    }
-    #images-drawer img:hover { transform: scale(1.03); }
     .mm-toolbar-brand { display: none !important; }
+
+    /* Columna Derecha: Metadatos y Opciones */
+    .meta-section { display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid var(--border); padding-bottom: 14px; }
+    .meta-section h4 { margin: 0 0 4px 0; font-size: 11px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px; }
+    .btn-row { display: flex; gap: 6px; }
+    .btn-row button { flex: 1; }
+    #images-drawer {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px;
+      max-height: 220px; overflow-y: auto; margin-top: 4px;
+    }
+    #images-drawer img {
+      width: 100%; height: 70px; object-fit: cover; border-radius: 4px;
+      border: 1px solid var(--border); cursor: pointer; background: #fff;
+    }
+
+    .mobile-only { display: none !important; }
+    #drawer-backdrop { display: none; }
+    #keyboard-toolbar.hidden { display: none !important; }
+
+    /* ====================================================================
+       MEDIA QUERY MÓVIL: PWA ESTILO OBSIDIAN (< 768px)
+       ==================================================================== */
+    @media (max-width: 768px) {
+      .desktop-only { display: none !important; }
+      .mobile-only { display: flex !important; }
+
+      #app-workspace {
+        display: block; position: relative;
+        height: 100dvh; padding-top: var(--header-h); padding-bottom: var(--bottom-nav-h);
+      }
+      body.bars-hidden #app-workspace { padding-top: 0; padding-bottom: 0; }
+
+      #editor-container, #map-container { width: 100% !important; height: 100%; border: none; }
+      #center-stage[data-mobile-view="editor"] #map-container { display: none !important; }
+      #center-stage[data-mobile-view="map"] #editor-container { display: none !important; }
+
+      /* Cajones Deslizantes Superpuestos (Sidebars) */
+      .drawer {
+        position: fixed; top: 0; bottom: 0; width: 82vw; max-width: 310px;
+        z-index: 50; box-shadow: 0 10px 35px rgba(0,0,0,0.6);
+      }
+      #left-sidebar { left: 0; transform: translateX(-105%); }
+      #right-sidebar { right: 0; transform: translateX(105%); }
+      #left-sidebar.open, #right-sidebar.open { transform: translateX(0); }
+
+      #drawer-backdrop {
+        display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+        backdrop-filter: blur(2px); z-index: 40;
+        opacity: 0; pointer-events: none; transition: opacity 0.25s;
+      }
+      #drawer-backdrop.visible { opacity: 1; pointer-events: auto; }
+
+      /* Barra Inferior para Una Sola Mano */
+      #bottom-nav {
+        position: fixed; bottom: 0; left: 0; right: 0;
+        height: var(--bottom-nav-h); padding-bottom: env(safe-area-inset-bottom);
+        background: var(--bg-elevated); backdrop-filter: blur(12px);
+        border-top: 1px solid var(--border);
+        justify-content: space-around; align-items: center; z-index: 20;
+        transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      body.bars-hidden #bottom-nav { transform: translateY(100%); }
+      #bottom-nav button {
+        background: transparent; border: none; font-size: 18px;
+        padding: 8px 12px; color: var(--text-normal);
+      }
+
+      /* Barra Contextual Flotante sobre el Teclado Virtual */
+      #keyboard-toolbar {
+        position: fixed; left: 0; right: 0;
+        bottom: var(--kb-offset, 0px);
+        height: 44px; background: var(--bg-secondary);
+        border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+        display: flex; align-items: center; gap: 6px; padding: 0 10px;
+        overflow-x: auto; white-space: nowrap; z-index: 35;
+        scrollbar-width: none;
+      }
+      #keyboard-toolbar::-webkit-scrollbar { display: none; }
+      #keyboard-toolbar button {
+        flex: 0 0 auto; padding: 5px 10px; font-size: 13px;
+        background: var(--bg-primary); border: 1px solid var(--border);
+      }
+    }
   </style>
 </head>
 <body>
 
-  <header>
-    <div class="bar-group">
-      <span class="brand">mdmap</span>
-      <button id="btn-toggle-sb" class="active" title="Mostrar/Ocultar panel de archivos">📁 Archivos</button>
-      <button id="btn-toggle-editor" class="active" title="Mostrar/Ocultar editor">⇄ Editor</button>
-      <select id="file-select" title="Seleccionar documento Markdown"></select>
-      <button id="btn-new-file" title="Crear nuevo archivo Markdown">+ Nuevo</button>
-      <button id="btn-del-file" class="danger" title="Borrar archivo actual">🗑</button>
-      <span id="save-status" class="saved">Guardado</span>
-    </div>
+  <!-- ====================================================================
+       PUNTO 2: ESTRUCTURA HTML SEMÁNTICA (OBSIDIAN LAYOUT)
+       ==================================================================== -->
+  <div id="pull-indicator">↓ Suelta para abrir Paleta de Comandos</div>
 
-    <div class="bar-group">
-      <button id="btn-fit" title="Encajar mapa en pantalla">⊡ Ajustar</button>
-      <button id="btn-autofit" title="Ajustar automáticamente al escribir">Auto-Fit</button>
-      <button id="btn-solid-color" title="Congelar colores por rama principal">Color sólido</button>
-      <button id="btn-wrap-text" title="Definir ancho máximo de texto en píxeles">Ajustar texto</button>
-      <button id="btn-expand-level" title="Definir nivel de despliegue inicial">Nivel máx.</button>
-      <button id="btn-toggle-gallery" title="Mostrar/Ocultar cajón inferior de imágenes">🖼 Cajón Imgs</button>
-    </div>
-
-    <div class="bar-group">
-      <button id="export-svg">↓ SVG</button>
-      <button id="export-html" class="primary">↓ HTML autónomo</button>
-    </div>
-  </header>
-
-  <div id="workspace">
-    <aside id="sidebar">
-      <div class="sb-section">
-        <input type="text" id="sb-search" placeholder="🔍 Buscar documento o carpeta..."/>
-        <div id="sb-tags"></div>
-      </div>
-      <div id="sb-tree"></div>
-    </aside>
-
-    <div id="editor-pane">
-      <textarea id="markdown"></textarea>
-      <div id="editor-footer">
-        <div style="display:flex; gap:6px; align-items:center;">
-          <span>Insertar imagen local:</span>
-          <select id="img-select"><option value="">-- Seleccionar de /images --</option></select>
-          <button id="btn-insert-img">Insertar en cursor</button>
-          <input type="file" id="file-upload-img" accept="image/*" style="display:none"/>
-          <button id="btn-upload-img" title="Subir imagen desde tu equipo a /images">↑ Subir imagen</button>
-        </div>
-        <button id="btn-open-url" title="Cargar Markdown desde URL externa">Cargar URL</button>
-      </div>
-    </div>
-
-    <div id="resizer"></div>
-
-    <div id="preview-pane">
-      <svg id="mindmap"></svg>
-      <div id="images-drawer"></div>
+  <div id="command-palette-backdrop" class="hidden">
+    <div id="command-palette">
+      <input type="text" id="cmd-input" placeholder="Escribe un comando o busca una nota..."/>
+      <div id="cmd-results"></div>
     </div>
   </div>
 
+  <!-- Barra Superior -->
+  <header id="app-header">
+    <div class="header-left">
+      <button id="btn-left-drawer" class="icon-btn" title="Mostrar/Ocultar Archivos">📁</button>
+      <span id="active-file-breadcrumb">doc.md</span>
+      <span id="save-status" class="saved">Guardado</span>
+    </div>
+    <div class="header-right">
+      <button id="btn-toggle-editor-desktop" class="desktop-only active" title="Mostrar/Ocultar Editor en Escritorio">⇄ Editor</button>
+      <button id="btn-switch-view" class="mobile-only primary" title="Alternar Texto / Mapa">🗺️ Mapa</button>
+      <button id="btn-theme" class="icon-btn" title="Cambiar Tema Claro/Oscuro">🌓</button>
+      <button id="btn-cmd-top" class="icon-btn" title="Paleta de Comandos (Pull-down)">⚡</button>
+      <button id="btn-right-drawer" class="icon-btn" title="Opciones y Metadatos">⚙️</button>
+    </div>
+  </header>
+
+  <!-- Escenario de 3 Columnas -->
+  <main id="app-workspace">
+    <div id="drawer-backdrop"></div>
+
+    <!-- 1. Columna Izquierda: Explorador de Archivos y Tags -->
+    <aside id="left-sidebar" class="drawer">
+      <div class="sb-section">
+        <input type="text" id="sb-search" placeholder="🔍 Buscar nota o carpeta..."/>
+        <div id="sb-tags"></div>
+      </div>
+      <div id="sb-tree"></div>
+      <div class="sb-footer">
+        <button id="btn-new-file" class="primary">+ Nueva</button>
+        <button id="btn-rename-file" title="Renombrar o mover nota actual">✏️ Renombrar</button>
+        <button id="btn-del-file" class="danger" title="Eliminar nota actual">🗑</button>
+      </div>
+    </aside>
+
+    <!-- 2. Columna Central: Editor Markdown y Mapa Mental -->
+    <section id="center-stage" data-mobile-view="editor">
+      <div id="editor-container" class="readable-line-length">
+        <textarea id="markdown"></textarea>
+      </div>
+      <div id="resizer" class="desktop-only"></div>
+      <div id="map-container">
+        <svg id="mindmap"></svg>
+      </div>
+    </section>
+
+    <!-- 3. Columna Derecha: Metadatos, Opciones del Mapa e Imágenes -->
+    <aside id="right-sidebar" class="drawer">
+      <div class="meta-section">
+        <h4>Visualización del Mapa</h4>
+        <button id="btn-fit">⊡ Encajar mapa en pantalla</button>
+        <button id="btn-autofit">Auto-Fit al escribir</button>
+        <button id="btn-solid-color">Color sólido por rama</button>
+        <button id="btn-wrap-text">Ajustar ancho de texto</button>
+        <button id="btn-expand-level">Nivel máx. desplegado</button>
+        <button id="btn-line-width">Ancho lectura confortable</button>
+      </div>
+
+      <div class="meta-section">
+        <h4>Imágenes Locales (/images)</h4>
+        <select id="img-select"><option value="">-- Seleccionar imagen --</option></select>
+        <div class="btn-row">
+          <button id="btn-insert-img">Insertar en nota</button>
+          <button id="btn-upload-img">↑ Subir</button>
+          <input type="file" id="file-upload-img" accept="image/*" style="display:none"/>
+        </div>
+        <div id="images-drawer"></div>
+      </div>
+
+      <div class="meta-section">
+        <h4>Acciones y Exportación</h4>
+        <button id="btn-open-url">🌐 Cargar desde URL</button>
+        <div class="btn-row">
+          <button id="export-svg">↓ SVG</button>
+          <button id="export-html" class="primary">↓ HTML</button>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- Barra Contextual de Edición sobre el Teclado Virtual (Móvil) -->
+  <div id="keyboard-toolbar" class="hidden">
+    <button data-insert="**|**"><b>B</b></button>
+    <button data-insert="*|*"><i>I</i></button>
+    <button data-insert="# ">H1</button>
+    <button data-insert="## ">H2</button>
+    <button data-insert="### ">H3</button>
+    <button data-insert="- ">• Lista</button>
+    <button data-insert="- [ ] ">☑ Tarea</button>
+    <button data-insert="$$\n|\n$$">∑ LaTeX</button>
+    <button id="kb-img">🖼 Img</button>
+    <button id="kb-indent">⇥ Tab</button>
+    <button id="kb-close">⌨️↓</button>
+  </div>
+
+  <!-- Barra de Navegación Inferior (Móvil - Una Sola Mano) -->
+  <nav id="bottom-nav" class="mobile-only">
+    <button id="nav-back" title="Nota anterior">←</button>
+    <button id="nav-forward" title="Nota siguiente">→</button>
+    <button id="nav-files" title="Explorador de archivos">📁</button>
+    <button id="nav-toggle-view" title="Alternar Editor / Mapa">🗺️</button>
+    <button id="nav-cmd" title="Paleta de comandos">⚡</button>
+    <button id="nav-meta" title="Opciones y Metadatos">⚙️</button>
+  </nav>
+
+  <!-- Librerías Locales -->
   <script src="/assets/d3.min.js"></script>
   <script src="/assets/markmap-lib.iife.js"></script>
   <script src="/assets/markmap-view.iife.js"></script>
@@ -191,8 +393,15 @@
   <script src="/assets/continuelist.js"></script>
   <script src="/assets/placeholder.js"></script>
 
+  <!-- ====================================================================
+       PUNTO 4: LÓGICA UNIFICADA (MARKMAP + GESTOS OBSIDIAN + PWA)
+       ==================================================================== -->
   <script>
   (async function(){
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+
     const { Transformer, Markmap, Toolbar, loadCSS, loadJS } = window.markmap;
     const transformer = new Transformer();
     const svgEl = document.getElementById('mindmap');
@@ -204,33 +413,35 @@
     const tbEl = tb.render();
     tbEl.querySelector('.mm-toolbar-brand')?.remove();
     Object.assign(tbEl.style, { position: 'absolute', bottom: '16px', right: '16px', zIndex: 10 });
-    document.getElementById('preview-pane').appendChild(tbEl);
+    document.getElementById('map-container').appendChild(tbEl);
 
     const cm = CodeMirror.fromTextArea(document.getElementById('markdown'), {
       mode: 'markdown',
       lineNumbers: true,
       lineWrapping: true,
       extraKeys: { 'Enter': 'newlineAndIndentContinueMarkdownList' },
-      placeholder: 'Escribe tu Markdown aquí…'
+      placeholder: 'Escribe tu nota en Markdown aquí…'
     });
 
+    // Estado e historial de navegación de notas
     let currentFile = 'doc.md';
     let contentCache = '';
     let saveTimer = null;
     let isLoadingFile = false;
     let allFiles = [];
     let activeTag = null;
-    const fileSelect = document.getElementById('file-select');
+    const navHistory = [];
+    let navIndex = -1;
 
     const state = {
       autoFit: false,
       colorFreezeLevel: 0,
       maxWidth: 0,
-      expandLevel: -1,
-      showGallery: false
+      expandLevel: -1
     };
 
     const statusEl = document.getElementById('save-status');
+    const breadcrumbEl = document.getElementById('active-file-breadcrumb');
     function setStatus(text, cls) {
       statusEl.textContent = text;
       statusEl.className = cls;
@@ -261,9 +472,7 @@
         try {
           const uri = await urlToDataURI(p);
           updatedMd = updatedMd.split(`(${p})`).join(`(${uri})`);
-        } catch (e) {
-          console.warn('No se pudo incrustar imagen:', p, e);
-        }
+        } catch (e) {}
       }
       return updatedMd;
     }
@@ -277,7 +486,6 @@
         initialExpandLevel: state.expandLevel
       };
       const derived = window.markmap.deriveOptions ? window.markmap.deriveOptions(rawOpts) : rawOpts;
-      // Forzar función de color para que el cambio a color sólido sea inmediato en todas las versiones
       derived.color = (node) => {
         const pathParts = String(node.state?.path || node.depth || '0').split('.');
         const key = freeze > 0 ? pathParts.slice(0, freeze).join('.') : pathParts.join('.');
@@ -317,27 +525,23 @@
         requestAnimationFrame(() => mm.fit());
       }
 
+      // Miniaturas en el panel derecho
       const drawer = document.getElementById('images-drawer');
       const imgPaths = extractImagePaths(md);
-      if (state.showGallery && imgPaths.length > 0) {
-        drawer.classList.add('visible');
-        drawer.innerHTML = '';
-        for (const p of imgPaths) {
-          const img = document.createElement('img');
-          img.src = p;
-          img.title = p;
-          img.onclick = () => window.open(p, '_blank');
-          drawer.appendChild(img);
-        }
-      } else {
-        drawer.classList.remove('visible');
+      drawer.innerHTML = '';
+      for (const p of imgPaths) {
+        const img = document.createElement('img');
+        img.src = p;
+        img.title = p;
+        img.onclick = () => window.open(p, '_blank');
+        drawer.appendChild(img);
       }
     }
 
     cm.on('change', () => render(false));
     if (window.ResizeObserver) new ResizeObserver(() => mm.fit()).observe(svgEl);
 
-    // --- Gestión de Archivos y Sidebar ---
+    // --- Gestión de Archivos y Árbol Lateral ---
     async function refreshSidebarMetadata() {
       const raw = await fetch('/api/files').then(r => r.json());
       allFiles = (Array.isArray(raw) ? raw : []).map(item => {
@@ -351,10 +555,6 @@
           tags: Array.isArray(item.tags) ? item.tags : []
         };
       });
-      if (fileSelect) {
-        fileSelect.innerHTML = allFiles.map(f => `<option value="${f.path}">${f.path}</option>`).join('');
-        fileSelect.value = currentFile;
-      }
       renderSidebar();
     }
 
@@ -362,32 +562,26 @@
       await refreshSidebarMetadata();
       const exists = allFiles.some(f => f.path === selectFile);
       const target = exists ? selectFile : (allFiles[0]?.path || 'doc.md');
-      if (fileSelect) fileSelect.value = target;
-      await loadDocument(target);
+      await loadDocument(target, true);
       renderSidebar();
     }
 
     function renderSidebar() {
-      const searchEl = document.getElementById('sb-search');
+      const q = document.getElementById('sb-search').value.toLowerCase();
       const tagsContainer = document.getElementById('sb-tags');
       const treeContainer = document.getElementById('sb-tree');
-      if (!treeContainer) return;
-
-      const q = (searchEl ? searchEl.value : '').toLowerCase();
 
       const tagSet = new Set();
       allFiles.forEach(f => (f.tags || []).forEach(t => tagSet.add(t)));
-      if (tagsContainer) {
-        tagsContainer.innerHTML = [...tagSet].map(t =>
-          `<span class="tag-pill ${activeTag === t ? 'active' : ''}" data-tag="${t}">#${t}</span>`
-        ).join('');
-        tagsContainer.querySelectorAll('.tag-pill').forEach(el => {
-          el.onclick = () => {
-            activeTag = (activeTag === el.dataset.tag) ? null : el.dataset.tag;
-            renderSidebar();
-          };
-        });
-      }
+      tagsContainer.innerHTML = [...tagSet].map(t =>
+        `<span class="tag-pill ${activeTag === t ? 'active' : ''}" data-tag="${t}">#${t}</span>`
+      ).join('');
+      tagsContainer.querySelectorAll('.tag-pill').forEach(el => {
+        el.onclick = () => {
+          activeTag = (activeTag === el.dataset.tag) ? null : el.dataset.tag;
+          renderSidebar();
+        };
+      });
 
       const filtered = allFiles.filter(f => {
         const matchText = f.path.toLowerCase().includes(q);
@@ -414,16 +608,22 @@
 
       treeContainer.querySelectorAll('.file-item').forEach(el => {
         el.onclick = async () => {
-          if (fileSelect) fileSelect.value = el.dataset.path;
-          await loadDocument(el.dataset.path);
+          await loadDocument(el.dataset.path, true);
           renderSidebar();
+          closeMobileDrawers();
         };
       });
     }
 
-    async function loadDocument(filename) {
+    async function loadDocument(filename, pushHistory = false) {
       isLoadingFile = true;
       currentFile = filename;
+      breadcrumbEl.textContent = filename;
+      if (pushHistory && navHistory[navIndex] !== filename) {
+        navHistory.splice(navIndex + 1);
+        navHistory.push(filename);
+        navIndex = navHistory.length - 1;
+      }
       const content = await fetch(`/api/content?file=${encodeURIComponent(filename)}`).then(r => r.text());
       contentCache = content;
       cm.setValue(content);
@@ -433,23 +633,45 @@
     }
 
     document.getElementById('sb-search').oninput = renderSidebar;
-    fileSelect.onchange = async () => {
-      await loadDocument(fileSelect.value);
-      renderSidebar();
+
+    // Historial Atrás / Adelante (Barra inferior móvil)
+    document.getElementById('nav-back').onclick = () => {
+      if (navIndex > 0) { navIndex--; loadDocument(navHistory[navIndex], false); renderSidebar(); }
+    };
+    document.getElementById('nav-forward').onclick = () => {
+      if (navIndex < navHistory.length - 1) { navIndex++; loadDocument(navHistory[navIndex], false); renderSidebar(); }
     };
 
     document.getElementById('btn-new-file').onclick = async () => {
-      let name = prompt('Nombre del nuevo archivo (puedes incluir carpeta, ej. clinica/insulina.md):');
+      let name = prompt('Nombre del nuevo archivo (ej. clinica/insulina.md):');
       if (!name) return;
       if (!name.endsWith('.md')) name += '.md';
       const title = name.split('/').pop().replace('.md', '');
-      const initialMd = `---\ntags: [general]\n---\n# ${title}\n\n## Apartado 1\n- Idea A\n- Idea B`;
+      const initialMd = `---\ntags: [general]\n---\n# ${title}\n\n## Apartado 1\n- Idea A`;
       await fetch(`/api/content?file=${encodeURIComponent(name)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
         body: initialMd
       });
       await loadFileList(name);
+      closeMobileDrawers();
+    };
+
+    document.getElementById('btn-rename-file').onclick = async () => {
+      if (currentFile === 'doc.md') return alert('El archivo base doc.md no se puede renombrar.');
+      const newName = prompt('Nuevo nombre o ruta (ej. clinica/protocolo.md):', currentFile);
+      if (!newName || newName === currentFile) return;
+      const res = await fetch('/api/rename', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ oldName: currentFile, newName })
+      });
+      if (res.ok) {
+        const updatedPath = await res.text();
+        await loadFileList(updatedPath);
+      } else {
+        alert('Error al renombrar el archivo.');
+      }
     };
 
     document.getElementById('btn-del-file').onclick = async () => {
@@ -459,11 +681,11 @@
       await loadFileList('doc.md');
     };
 
-    // --- Imágenes locales ---
+    // --- Imágenes Locales ---
     const imgSelect = document.getElementById('img-select');
     async function refreshImageList(selected = '') {
       const imgs = await fetch('/api/images').then(r => r.json());
-      imgSelect.innerHTML = '<option value="">-- Seleccionar de /images --</option>' +
+      imgSelect.innerHTML = '<option value="">-- Seleccionar imagen --</option>' +
         imgs.map(i => `<option value="/images/${i}">${i}</option>`).join('');
       if (selected) imgSelect.value = `/images/${selected}`;
     }
@@ -486,8 +708,6 @@
           const nameNoExt = file.name.replace(/\.[^.]+$/, '');
           cm.replaceSelection(`![${nameNoExt}](/images/${file.name})`);
           cm.focus();
-        } else {
-          alert('Error al subir la imagen');
         }
         fileUploadImg.value = '';
       };
@@ -500,78 +720,270 @@
       const name = val.split('/').pop().replace(/\.[^.]+$/, '');
       cm.replaceSelection(`![${name}](${val})`);
       cm.focus();
+      closeMobileDrawers();
     };
 
-    // --- Botones de la Barra Superior ---
-    document.getElementById('btn-toggle-sb').onclick = function() {
-      const sb = document.getElementById('sidebar');
-      sb.classList.toggle('hidden');
-      this.classList.toggle('active', !sb.classList.contains('hidden'));
+    // --- Control de Sidebars (Escritorio vs Móvil) ---
+    const workspace = document.getElementById('app-workspace');
+    const leftDrawer = document.getElementById('left-sidebar');
+    const rightDrawer = document.getElementById('right-sidebar');
+    const backdrop = document.getElementById('drawer-backdrop');
+
+    function closeMobileDrawers() {
+      leftDrawer.classList.remove('open');
+      rightDrawer.classList.remove('open');
+      backdrop.classList.remove('visible');
+    }
+    backdrop.onclick = closeMobileDrawers;
+
+    function toggleLeftSidebar() {
+      if (window.innerWidth <= 768) {
+        rightDrawer.classList.remove('open');
+        const isOpen = leftDrawer.classList.toggle('open');
+        backdrop.classList.toggle('visible', isOpen);
+      } else {
+        workspace.classList.toggle('hide-left');
+        setTimeout(() => mm.fit(), 260);
+      }
+    }
+
+    function toggleRightSidebar() {
+      if (window.innerWidth <= 768) {
+        leftDrawer.classList.remove('open');
+        const isOpen = rightDrawer.classList.toggle('open');
+        backdrop.classList.toggle('visible', isOpen);
+      } else {
+        workspace.classList.toggle('hide-right');
+        setTimeout(() => mm.fit(), 260);
+      }
+    }
+
+    document.getElementById('btn-left-drawer').onclick = toggleLeftSidebar;
+    document.getElementById('nav-files').onclick = toggleLeftSidebar;
+    document.getElementById('btn-right-drawer').onclick = toggleRightSidebar;
+    document.getElementById('nav-meta').onclick = toggleRightSidebar;
+
+    // Alternar Vista en Móvil (Editor <-> Mapa) y en Escritorio
+    const centerStage = document.getElementById('center-stage');
+    const btnSwitchView = document.getElementById('btn-switch-view');
+    function switchMobileView() {
+      const current = centerStage.dataset.mobileView;
+      const next = current === 'editor' ? 'map' : 'editor';
+      centerStage.dataset.mobileView = next;
+      btnSwitchView.textContent = next === 'editor' ? '🗺️ Mapa' : '✏️ Texto';
+      if (next === 'map') setTimeout(() => mm.fit(), 60);
+      else setTimeout(() => cm.refresh(), 60);
+    }
+    btnSwitchView.onclick = switchMobileView;
+    document.getElementById('nav-toggle-view').onclick = switchMobileView;
+
+    document.getElementById('btn-toggle-editor-desktop').onclick = function() {
+      const ed = document.getElementById('editor-container');
+      ed.classList.toggle('hidden');
+      this.classList.toggle('active', !ed.classList.contains('hidden'));
       setTimeout(() => mm.fit(), 50);
     };
 
-    document.getElementById('btn-toggle-editor').onclick = function() {
-      const pane = document.getElementById('editor-pane');
-      pane.classList.toggle('hidden');
-      this.classList.toggle('active', !pane.classList.contains('hidden'));
-      setTimeout(() => mm.fit(), 50);
+    document.getElementById('btn-theme').onclick = () => {
+      document.body.classList.toggle('theme-light');
     };
 
-    document.getElementById('btn-fit').onclick = () => mm.fit();
-
+    // --- Opciones de Markmap ---
+    document.getElementById('btn-fit').onclick = () => { mm.fit(); closeMobileDrawers(); };
     document.getElementById('btn-autofit').onclick = function() {
       state.autoFit = !state.autoFit;
       this.classList.toggle('active', state.autoFit);
     };
-
     document.getElementById('btn-solid-color').onclick = function() {
       state.colorFreezeLevel = state.colorFreezeLevel ? 0 : 2;
       this.classList.toggle('active', state.colorFreezeLevel > 0);
       render(false);
     };
-
     document.getElementById('btn-wrap-text').onclick = function() {
       const current = state.maxWidth > 0 ? state.maxWidth : '';
-      const input = prompt('Ancho máximo de texto en píxeles (ej. 250, 350 o vacío para desactivar):', current);
+      const input = prompt('Ancho máximo de nodo en píxeles (ej. 250, o vacío para desactivar):', current);
       if (input === null) return;
       const n = parseInt(input, 10);
       state.maxWidth = (isNaN(n) || n <= 0) ? 0 : n;
       this.classList.toggle('active', state.maxWidth > 0);
-      this.textContent = state.maxWidth > 0 ? `Ancho: ${state.maxWidth}px` : 'Ajustar texto';
+      this.textContent = state.maxWidth > 0 ? `Ancho: ${state.maxWidth}px` : 'Ajustar ancho de texto';
       render(true);
     };
-
     document.getElementById('btn-expand-level').onclick = function() {
       const current = state.expandLevel > 0 ? state.expandLevel : '';
-      const input = prompt('Nivel máximo desplegado (deja vacío para desplegar todo):', current);
+      const input = prompt('Nivel máximo desplegado (vacío para todos):', current);
       if (input === null) return;
       const n = parseInt(input, 10);
       state.expandLevel = isNaN(n) ? -1 : n;
       this.classList.toggle('active', state.expandLevel > 0);
-      this.textContent = state.expandLevel > 0 ? `Nivel máx: ${state.expandLevel}` : 'Nivel máx.';
+      this.textContent = state.expandLevel > 0 ? `Nivel máx: ${state.expandLevel}` : 'Nivel máx. desplegado';
       render(true);
     };
-
-    document.getElementById('btn-toggle-gallery').onclick = function() {
-      state.showGallery = !state.showGallery;
-      this.classList.toggle('active', state.showGallery);
-      render(false);
+    document.getElementById('btn-line-width').onclick = function() {
+      const ed = document.getElementById('editor-container');
+      ed.classList.toggle('readable-line-length');
+      this.classList.toggle('active', ed.classList.contains('readable-line-length'));
     };
-
     document.getElementById('btn-open-url').onclick = async () => {
       const url = prompt('Introduce la URL del archivo Markdown:');
       if (url) cm.setValue(await fetch(url).then(r => r.text()));
     };
 
-    // Divisor redimensionable
+    // --- Paleta de Comandos (Pull-Down Action) ---
+    const cmdBackdrop = document.getElementById('command-palette-backdrop');
+    const cmdInput = document.getElementById('cmd-input');
+    const cmdResults = document.getElementById('cmd-results');
+
+    const commands = [
+      { name: '🗺️ Alternar Vista Editor / Mapa', action: () => switchMobileView() },
+      { name: '⊡ Encajar Mapa en Pantalla', action: () => mm.fit() },
+      { name: '🎨 Alternar Color Sólido por Rama', action: () => document.getElementById('btn-solid-color').click() },
+      { name: '📏 Configurar Ancho de Texto en Nodos', action: () => document.getElementById('btn-wrap-text').click() },
+      { name: '🌓 Cambiar Tema Oscuro / Claro', action: () => document.body.classList.toggle('theme-light') },
+      { name: '➕ Crear Nueva Nota Markdown', action: () => document.getElementById('btn-new-file').click() },
+      { name: '⬇️ Exportar Mapa a HTML Autónomo', action: () => document.getElementById('export-html').click() },
+      { name: '⬇️ Exportar Mapa a SVG', action: () => document.getElementById('export-svg').click() }
+    ];
+
+    function openCommandPalette() {
+      cmdBackdrop.classList.remove('hidden');
+      cmdInput.value = '';
+      renderCommandList('');
+      setTimeout(() => cmdInput.focus(), 50);
+    }
+    function closeCommandPalette() {
+      cmdBackdrop.classList.add('hidden');
+    }
+    cmdBackdrop.onclick = (e) => { if (e.target === cmdBackdrop) closeCommandPalette(); };
+    document.getElementById('btn-cmd-top').onclick = openCommandPalette;
+    document.getElementById('nav-cmd').onclick = openCommandPalette;
+
+    function renderCommandList(query) {
+      const q = query.toLowerCase();
+      const matchedCmds = commands.filter(c => c.name.toLowerCase().includes(q));
+      const matchedFiles = allFiles.filter(f => f.path.toLowerCase().includes(q));
+
+      let html = '';
+      matchedCmds.forEach((c, idx) => {
+        html += `<div class="cmd-item" data-type="cmd" data-idx="${idx}"><span>${c.name}</span><small>Comando</small></div>`;
+      });
+      matchedFiles.forEach(f => {
+        html += `<div class="cmd-item" data-type="file" data-path="${f.path}"><span>📄 ${f.path}</span><small>Abrir nota</small></div>`;
+      });
+      cmdResults.innerHTML = html || '<div style="padding:12px;color:var(--text-muted)">Sin resultados</div>';
+
+      cmdResults.querySelectorAll('.cmd-item').forEach(el => {
+        el.onclick = () => {
+          closeCommandPalette();
+          if (el.dataset.type === 'cmd') matchedCmds[el.dataset.idx].action();
+          else loadDocument(el.dataset.path, true);
+        };
+      });
+    }
+    cmdInput.oninput = () => renderCommandList(cmdInput.value);
+
+    // --- Gestos Táctiles Móviles (Swipe Lateral y Pull-Down) ---
+    let touchStartX = 0, touchStartY = 0;
+    const pullIndicator = document.getElementById('pull-indicator');
+
+    document.addEventListener('touchstart', (e) => {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+
+    document.addEventListener('touchmove', (e) => {
+      if (window.innerWidth > 768) return;
+      const dy = e.touches[0].clientY - touchStartY;
+      if (touchStartY < 70 && dy > 50) pullIndicator.classList.add('visible');
+      else pullIndicator.classList.remove('visible');
+    }, { passive: true });
+
+    document.addEventListener('touchend', (e) => {
+      pullIndicator.classList.remove('visible');
+      if (window.innerWidth > 768) return;
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      const dy = e.changedTouches[0].clientY - touchStartY;
+      const isMap = centerStage.dataset.mobileView === 'map';
+
+      // Swipe horizontal
+      if (Math.abs(dx) > 75 && Math.abs(dx) > Math.abs(dy) * 1.8) {
+        if (dx > 0 && (touchStartX < 45 || !isMap) && !rightDrawer.classList.contains('open')) {
+          leftDrawer.classList.add('open');
+          backdrop.classList.add('visible');
+        } else if (dx < 0 && (touchStartX > window.innerWidth - 45 || !isMap) && !leftDrawer.classList.contains('open')) {
+          rightDrawer.classList.add('open');
+          backdrop.classList.add('visible');
+        } else {
+          closeMobileDrawers();
+        }
+      }
+      // Pull-down superior -> Paleta de comandos
+      if (dy > 95 && Math.abs(dy) > Math.abs(dx) * 2 && touchStartY < 75) {
+        openCommandPalette();
+      }
+    }, { passive: true });
+
+    // --- Autohide en Scroll (Lectura Inmersiva) ---
+    let lastScrollTop = 0;
+    cm.on('scroll', (instance) => {
+      if (window.innerWidth > 768) return;
+      const st = instance.getScrollInfo().top;
+      if (st > lastScrollTop + 18 && st > 60) {
+        document.body.classList.add('bars-hidden');
+      } else if (st < lastScrollTop - 12 || st <= 10) {
+        document.body.classList.remove('bars-hidden');
+      }
+      lastScrollTop = st <= 0 ? 0 : st;
+    });
+
+    // --- Barra Contextual sobre el Teclado Virtual ---
+    const kbToolbar = document.getElementById('keyboard-toolbar');
+    cm.on('focus', () => {
+      if (window.innerWidth <= 768) kbToolbar.classList.remove('hidden');
+    });
+    cm.on('blur', () => {
+      setTimeout(() => kbToolbar.classList.add('hidden'), 180);
+    });
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', () => {
+        const kbHeight = Math.max(0, window.innerHeight - window.visualViewport.height);
+        document.documentElement.style.setProperty('--kb-offset', `${kbHeight}px`);
+      });
+    }
+
+    kbToolbar.querySelectorAll('button[data-insert]').forEach(btn => {
+      btn.addEventListener('mousedown', (e) => e.preventDefault());
+      btn.onclick = () => {
+        const tpl = btn.dataset.insert.replace(/\\n/g, '\n');
+        const doc = cm.getDoc();
+        const sel = doc.getSelection();
+        if (tpl.includes('|')) {
+          const [prefix, suffix] = tpl.split('|');
+          const cursor = doc.getCursor();
+          doc.replaceSelection(`${prefix}${sel}${suffix}`);
+          if (!sel) {
+            doc.setCursor({ line: cursor.line, ch: cursor.ch + prefix.length });
+          }
+        } else {
+          doc.replaceSelection(`${tpl}${sel}`);
+        }
+        cm.focus();
+      };
+    });
+    document.getElementById('kb-img').onclick = () => toggleRightSidebar();
+    document.getElementById('kb-indent').onclick = () => { cm.execCommand('indentMore'); cm.focus(); };
+    document.getElementById('kb-close').onclick = () => cm.getInputField().blur();
+
+    // --- Divisor Redimensionable (Escritorio) ---
     const resizer = document.getElementById('resizer');
-    const editorPane = document.getElementById('editor-pane');
+    const editorContainer = document.getElementById('editor-container');
     resizer.addEventListener('mousedown', (e) => {
       e.preventDefault();
       const onMove = (ev) => {
-        const sbWidth = document.getElementById('sidebar').classList.contains('hidden') ? 0 : document.getElementById('sidebar').offsetWidth;
-        const newWidth = ((ev.clientX - sbWidth) / window.innerWidth) * 100;
-        if (newWidth > 15 && newWidth < 80) editorPane.style.width = `${newWidth}%`;
+        const rect = centerStage.getBoundingClientRect();
+        const newW = ((ev.clientX - rect.left) / rect.width) * 100;
+        if (newW > 15 && newW < 85) editorContainer.style.width = `${newW}%`;
       };
       const onUp = () => {
         window.removeEventListener('mousemove', onMove);
@@ -582,13 +994,12 @@
       window.addEventListener('mouseup', onUp);
     });
 
-    // Exportar SVG
+    // --- Exportar SVG y HTML ---
     document.getElementById('export-svg').onclick = async () => {
       const cloneSvg = svgEl.cloneNode(true);
       cloneSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
       cloneSvg.setAttribute('width', svgEl.clientWidth);
       cloneSvg.setAttribute('height', svgEl.clientHeight);
-
       const imgs = cloneSvg.querySelectorAll('img');
       for (const img of imgs) {
         const src = img.getAttribute('src');
@@ -596,7 +1007,6 @@
           try { img.setAttribute('src', await urlToDataURI(src)); } catch(e){}
         }
       }
-
       const svgData = new XMLSerializer().serializeToString(cloneSvg);
       const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
       const url = URL.createObjectURL(blob);
@@ -607,11 +1017,9 @@
       URL.revokeObjectURL(url);
     };
 
-    // Exportar HTML Autónomo
     document.getElementById('export-html').onclick = async () => {
       const rawMd = cm.getValue();
       const embeddedMd = await embedImagesInMarkdown(rawMd);
-
       const [d3js, libjs, viewjs, cssTB, jsTB] = await Promise.all([
         fetch('/assets/d3.min.js').then(r => r.text()),
         fetch('/assets/markmap-lib.iife.js').then(r => r.text()),
@@ -619,60 +1027,12 @@
         fetch('/assets/markmap-toolbar.css').then(r => r.text()),
         fetch('/assets/markmap-toolbar.js').then(r => r.text()),
       ]);
-
       const exportOptions = JSON.stringify({
         colorFreezeLevel: state.colorFreezeLevel > 0 ? state.colorFreezeLevel : 0,
         maxWidth: state.maxWidth > 0 ? state.maxWidth : 0,
         initialExpandLevel: state.expandLevel
       });
-
-      const html = `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <title>${currentFile.replace('.md', '')} - Markmap</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"/>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body, #mindmap { width: 100vw; height: 100vh; display: block; font-family: sans-serif; }
-    svg#mindmap img { max-height: 160px; width: auto; border-radius: 4px; display: block; margin: 4px 0; }
-    .mm-toolbar-brand { display: none !important; }
-    ${cssTB}
-  </style>
-</head>
-<body>
-  <svg id="mindmap"></svg>
-  <script>${d3js}<\/script>
-  <script>${libjs}<\/script>
-  <script>${viewjs}<\/script>
-  <script>${jsTB}<\/script>
-  <script>
-    (async function(){
-      const { Transformer, Markmap, Toolbar, loadCSS, loadJS, deriveOptions } = window.markmap;
-      const transformer = new Transformer();
-      const svgEl = document.getElementById("mindmap");
-      const rawOpts = ${exportOptions};
-      const opts = deriveOptions ? deriveOptions(rawOpts) : rawOpts;
-      const mm = Markmap.create(svgEl, opts);
-      const { root, features } = transformer.transform(${JSON.stringify(embeddedMd)});
-      const { styles, scripts } = transformer.getUsedAssets(features);
-      if (styles && loadCSS) loadCSS(styles);
-      if (scripts && loadJS) await loadJS(scripts, { getMarkmap: () => window.markmap });
-      mm.setData(root, opts);
-      setTimeout(() => mm.fit(), 50);
-      window.addEventListener("resize", () => mm.fit());
-      const tb = new Toolbar();
-      if (tb.setBrand) tb.setBrand(false);
-      tb.attach(mm);
-      const el = tb.render();
-      el.querySelector(".mm-toolbar-brand")?.remove();
-      Object.assign(el.style, { position: "absolute", bottom: "20px", right: "20px" });
-      document.body.appendChild(el);
-    })();
-  <\/script>
-</body>
-</html>`;
-
+      const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>${currentFile}</title><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"/><style>*{margin:0;padding:0;box-sizing:border-box}html,body,#mindmap{width:100vw;height:100vh;display:block;font-family:sans-serif}svg#mindmap img{max-height:160px;width:auto;border-radius:4px;display:block;margin:4px 0}.mm-toolbar-brand{display:none!important}${cssTB}</style></head><body><svg id="mindmap"></svg><script>${d3js}<\/script><script>${libjs}<\/script><script>${viewjs}<\/script><script>${jsTB}<\/script><script>(async function(){const{Transformer,Markmap,Toolbar,loadCSS,loadJS,deriveOptions}=window.markmap;const transformer=new Transformer();const svgEl=document.getElementById("mindmap");const rawOpts=${exportOptions};const opts=deriveOptions?deriveOptions(rawOpts):rawOpts;const mm=Markmap.create(svgEl,opts);const{root,features}=transformer.transform(${JSON.stringify(embeddedMd)});const{styles,scripts}=transformer.getUsedAssets(features);if(styles&&loadCSS)loadCSS(styles);if(scripts&&loadJS)await loadJS(scripts,{getMarkmap:()=>window.markmap});mm.setData(root,opts);setTimeout(()=>mm.fit(),50);window.addEventListener("resize",()=>mm.fit());const tb=new Toolbar();if(tb.setBrand)tb.setBrand(false);tb.attach(mm);const el=tb.render();el.querySelector(".mm-toolbar-brand")?.remove();Object.assign(el.style,{position:"absolute",bottom:"20px",right:"20px"});document.body.appendChild(el);})();<\/script></body></html>`;
       const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -682,7 +1042,6 @@
       URL.revokeObjectURL(url);
     };
 
-    // Carga inicial
     await loadFileList('doc.md');
   })();
   </script>
