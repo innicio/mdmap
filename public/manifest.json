@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "Markmap Local Studio",
-  "short_name": "Markmap",
+  "name": "mdmaps Local Studio",
+  "short_name": "mdmaps",
   "description": "Estudio Markdown, Mapas Mentales y Documentos Knit Offline",
   "start_url": "/",
   "scope": "/",

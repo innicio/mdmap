@@ -1,12 +1,32 @@
+
 services:
-  markmap:
+  mdmap:
     build: .
-    ports:
-      - "9000:9000"
+    container_name: mdmap
+    restart: unless-stopped
+    env_file:
+      - .env
+    expose:
+      - "9000"
     volumes:
       - ./content:/app/content
       - ./images:/app/images
       - ./public:/app/public
       - ./server.js:/app/server.js
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    #networks:
+    #  - cloudflare_default
+
+#networks:
+#  cloudflare_default:
+#    external: true
+
+
       
 

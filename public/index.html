@@ -3,56 +3,57 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-  <meta name="theme-color" content="#1e1e1e"/>
+  <meta name="theme-color" content="#16171b"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-  <title>Markmap & Knit Studio</title>
+  <title>mdmap</title>
   <link rel="manifest" href="/manifest.json"/>
   <link rel="apple-touch-icon" href="/api/pwa-icon?size=192"/>
   <link rel="stylesheet" href="/assets/codemirror.css"/>
-  <link rel="stylesheet" href="/assets/markmap-toolbar.css"/>
-  <!-- KaTeX y Marked en el head para compilación instantánea en la carga inicial -->
+  <!-- KaTeX, Marked y DOMPurify para la Vista Knit y Exportación PDF -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"/>
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="/assets/purify.min.js"></script>
 
   <style>
     :root {
-      --bg-primary: #1e1e1e;
-      --bg-secondary: #252526;
-      --bg-elevated: rgba(37, 37, 38, 0.94);
-      --text-normal: #dcddde;
-      --text-muted: #8e8e93;
-      --accent: #7f6df2;
-      --accent-hover: #6955e0;
+      --bg-primary: #16171b;
+      --bg-secondary: #1d1f25;
+      --bg-elevated: rgba(29, 31, 37, 0.9);
+      --text-normal: #e4e6eb;
+      --text-muted: #8b91a0;
+      --accent: #7c6cf6;
+      --accent-hover: #6956eb;
+      --accent-soft: rgba(124, 108, 246, 0.16);
       --danger: #e11d48;
-      --border: #333333;
-      --header-h: 46px;
+      --border: rgba(255, 255, 255, 0.08);
+      --header-h: 50px;
       --line-width: 68ch;
     }
 
     body.theme-light {
       --bg-primary: #ffffff;
-      --bg-secondary: #f3f4f6;
-      --bg-elevated: rgba(243, 244, 246, 0.94);
-      --text-normal: #1e293b;
+      --bg-secondary: #f6f7f9;
+      --bg-elevated: rgba(255, 255, 255, 0.92);
+      --text-normal: #181a1f;
       --text-muted: #64748b;
-      --border: #cbd5e1;
+      --border: rgba(15, 23, 42, 0.1);
     }
 
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html, body {
       margin: 0; padding: 0; height: 100dvh;
       background: var(--bg-primary); color: var(--text-normal);
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
       overflow: hidden; overscroll-behavior-y: none;
     }
 
     button, select, input[type="text"] {
       background: var(--bg-primary); color: var(--text-normal);
-      border: 1px solid var(--border); padding: 5px 10px;
-      border-radius: 6px; font-size: 12px; cursor: pointer;
-      transition: background 0.15s, border-color 0.15s;
+      border: 1px solid var(--border); padding: 6px 10px;
+      border-radius: 7px; font-size: 12.5px; cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
     }
     button:hover, select:hover { border-color: var(--accent); }
     button.active, button.primary {
@@ -60,12 +61,19 @@
     }
     button.primary:hover { background: var(--accent-hover); }
     button.danger:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
-    .icon-btn { font-size: 15px; padding: 5px 8px; background: transparent; border-color: transparent; }
-    .icon-btn:hover { background: rgba(127, 109, 242, 0.15); }
+    .icon-btn {
+      font-size: 15px; padding: 5px 8px; background: transparent;
+      border-color: transparent; border-radius: 8px;
+    }
+    .icon-btn:hover { background: var(--accent-soft); border-color: transparent; }
+
+    .field-label {
+      font-size: 11px; color: var(--text-muted); margin-top: 2px;
+    }
 
     /* Indicador Pull-Down y Paleta de Comandos */
     #pull-indicator {
-      position: fixed; top: -40px; left: 50%; transform: translateX(-50%);
+      position: fixed; top: -42px; left: 50%; transform: translateX(-50%);
       background: var(--accent); color: #fff; padding: 6px 16px;
       border-radius: 20px; font-size: 12px; font-weight: 600;
       z-index: 90; transition: top 0.2s; pointer-events: none;
@@ -73,55 +81,85 @@
     #pull-indicator.visible { top: 12px; }
 
     #command-palette-backdrop {
-      position: fixed; inset: 0; background: rgba(0,0,0,0.6);
-      backdrop-filter: blur(3px); z-index: 100;
+      position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(4px); z-index: 100;
       display: flex; justify-content: center; align-items: flex-start; padding-top: 12vh;
     }
     #command-palette-backdrop.hidden { display: none !important; }
     #command-palette {
-      width: 90%; max-width: 520px; background: var(--bg-secondary);
-      border: 1px solid var(--border); border-radius: 10px;
-      box-shadow: 0 20px 50px rgba(0,0,0,0.5); overflow: hidden;
+      width: 92%; max-width: 520px; background: var(--bg-secondary);
+      border: 1px solid var(--border); border-radius: 12px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55); overflow: hidden;
     }
     #cmd-input {
       width: 100%; border: none; border-bottom: 1px solid var(--border);
-      padding: 14px 16px; font-size: 15px; background: var(--bg-primary); color: var(--text-normal); outline: none; border-radius: 0;
+      padding: 14px 16px; font-size: 15px; background: var(--bg-primary);
+      color: var(--text-normal); outline: none; border-radius: 0;
     }
     #cmd-results { max-height: 55vh; overflow-y: auto; padding: 6px; }
     .cmd-item {
-      padding: 10px 12px; border-radius: 6px; cursor: pointer;
-      display: flex; justify-content: space-between; font-size: 13px;
+      padding: 10px 12px; border-radius: 8px; cursor: pointer;
+      display: flex; justify-content: space-between; align-items: center; font-size: 13px;
     }
+    .cmd-item small { color: var(--text-muted); font-size: 11px; }
     .cmd-item:hover { background: var(--accent); color: #fff; }
+    .cmd-item:hover small { color: rgba(255, 255, 255, 0.85); }
 
     /* Cabecera Superior */
     #app-header {
       height: var(--header-h); background: var(--bg-elevated);
-      backdrop-filter: blur(12px); border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(14px); border-bottom: 1px solid var(--border);
       display: flex; align-items: center; justify-content: space-between;
-      padding: 0 10px; position: fixed; top: 0; left: 0; right: 0; z-index: 20;
-      gap: 8px; overflow-x: auto; white-space: nowrap;
+      padding: 0 12px; position: fixed; top: 0; left: 0; right: 0; z-index: 20;
+      gap: 8px; white-space: nowrap;
       transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     }
     body.bars-hidden #app-header { transform: translateY(-100%); }
     .header-group { display: flex; align-items: center; gap: 6px; }
     #active-file-breadcrumb {
-      font-size: 13px; font-weight: 600; max-width: 170px;
+      font-size: 13px; font-weight: 600; max-width: 190px;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
-    #save-status { font-size: 11px; padding: 2px 7px; border-radius: 10px; }
+    #save-status {
+      font-size: 11px; padding: 2px 7px; border-radius: 10px;
+      background: rgba(255, 255, 255, 0.04);
+    }
     #save-status.saving { color: #fbbf24; }
     #save-status.saved { color: #34d399; }
+
+    /* Selector segmentado 3 vías (Móvil) */
+    .segmented-control {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 2px;
+      gap: 2px;
+      align-items: center;
+    }
+    .segmented-control button {
+      border: none;
+      background: transparent;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 14px;
+      min-width: 38px;
+      min-height: 34px;
+    }
+    .segmented-control button.active {
+      background: var(--accent);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(124, 108, 246, 0.35);
+    }
 
     /* Layout Base de Escritorio: 3 Columnas */
     #app-workspace {
       display: grid;
-      grid-template-columns: 240px 1fr 260px;
+      grid-template-columns: 245px 1fr 275px;
       height: 100dvh; padding-top: var(--header-h);
       transition: grid-template-columns 0.2s ease;
     }
-    #app-workspace.hide-left { grid-template-columns: 0px 1fr 260px; }
-    #app-workspace.hide-right { grid-template-columns: 240px 1fr 0px; }
+    #app-workspace.hide-left { grid-template-columns: 0px 1fr 275px; }
+    #app-workspace.hide-right { grid-template-columns: 245px 1fr 0px; }
     #app-workspace.hide-left.hide-right { grid-template-columns: 0px 1fr 0px; }
 
     .drawer {
@@ -129,118 +167,154 @@
       overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column;
       transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
     }
-    #right-sidebar { border-right: none; border-left: 1px solid var(--border); padding: 12px; gap: 14px; }
+    #right-sidebar { border-right: none; border-left: 1px solid var(--border); padding: 14px; gap: 16px; }
 
     /* Sidebar Izquierdo: Archivos y Tags */
     .sb-section { padding: 10px; border-bottom: 1px solid var(--border); }
-    #sb-search { width: 100%; }
-    #sb-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+    #sb-search { width: 100%; padding: 7px 10px; }
+    #sb-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
     .tag-pill {
-      background: var(--bg-primary); color: var(--text-muted); padding: 2px 8px;
+      background: var(--bg-primary); color: var(--text-muted); padding: 3px 8px;
       border-radius: 10px; font-size: 11px; cursor: pointer; border: 1px solid var(--border);
     }
     .tag-pill.active { background: var(--accent); color: #fff; border-color: var(--accent); }
     #sb-tree { flex: 1; overflow-y: auto; padding: 6px 0; }
     .folder-title {
       padding: 6px 12px; font-weight: 700; color: var(--text-muted);
-      font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px;
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; margin-top: 6px;
     }
     .file-item {
       padding: 7px 12px 7px 20px; cursor: pointer; display: flex;
-      justify-content: space-between; align-items: center; font-size: 13px; color: var(--text-normal);
+      justify-content: space-between; align-items: center; font-size: 13px;
+      color: var(--text-normal); border-left: 3px solid transparent;
     }
-    .file-item:hover { background: rgba(127, 109, 242, 0.1); }
+    .file-item:hover { background: var(--accent-soft); }
     .file-item.active {
-      background: rgba(127, 109, 242, 0.2); color: #fff;
-      font-weight: 600; border-left: 3px solid var(--accent);
+      background: var(--accent-soft); color: #fff;
+      font-weight: 600; border-left-color: var(--accent);
     }
     body.theme-light .file-item.active { color: var(--accent); }
     .file-tags { font-size: 10px; color: var(--text-muted); margin-left: 6px; }
-    .sb-footer { padding: 8px; border-top: 1px solid var(--border); display: flex; gap: 5px; }
-    .sb-footer button { flex: 1; padding: 5px 6px; font-size: 11px; }
-    .sb-footer button.danger { flex: 0 0 32px; }
+    .sb-footer { padding: 10px; border-top: 1px solid var(--border); display: flex; gap: 5px; }
+    .sb-footer button { flex: 1; padding: 6px; font-size: 11.5px; }
+    .sb-footer button.danger { flex: 0 0 34px; }
 
-    /* Escenario Central: Editor + Visor Dual (Mapa / Knit) */
+    /* Escenario Central: Editor + Visor Dual (Markmap v1 / Knit) */
     #center-stage { display: flex; height: 100%; overflow: hidden; position: relative; }
     #editor-container {
-      width: 45%; min-width: 220px; height: 100%;
+      width: 46%; min-width: 220px; height: 100%;
       display: flex; flex-direction: column; background: var(--bg-primary);
       border-right: 1px solid var(--border);
     }
     #editor-container.hidden { display: none !important; }
     .CodeMirror {
-      flex: 1; height: 100%; font-size: 14.5px; line-height: 1.6;
+      flex: 1; height: 100%; font-size: 14.5px; line-height: 1.65;
       background: var(--bg-primary) !important; color: var(--text-normal) !important;
       font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
     }
     .CodeMirror-gutters { background: var(--bg-secondary) !important; border-right: 1px solid var(--border) !important; }
+    .CodeMirror-linenumber { color: var(--text-muted) !important; }
     .CodeMirror-cursor { border-left: 2px solid var(--accent) !important; }
     #editor-container.readable-line-length .CodeMirror-lines {
-      max-width: var(--line-width); margin: 0 auto; padding: 16px 10px;
+      max-width: var(--line-width); margin: 0 auto; padding: 18px 12px;
     }
 
-    #resizer { width: 5px; cursor: col-resize; background: var(--border); transition: background 0.2s; }
+    #resizer { width: 4px; cursor: col-resize; background: var(--border); transition: background 0.2s; }
     #resizer:hover { background: var(--accent); }
 
-    #viewer-container { flex: 1; height: 100%; position: relative; display: flex; flex-direction: column; background: var(--bg-primary); overflow: hidden; }
-    svg#mindmap { flex: 1; width: 100%; height: 100%; display: block; color: var(--text-normal); }
-    svg#mindmap.hidden { display: none !important; }
-    svg#mindmap img { max-height: 160px; width: auto; border-radius: 4px; display: block; margin: 4px 0; }
-    .mm-toolbar-brand { display: none !important; }
+    #viewer-container {
+      flex: 1; height: 100%; position: relative; display: flex;
+      flex-direction: column; background: var(--bg-primary); overflow: hidden;
+    }
 
-    /* --- Visor en vivo estilo RMarkdown (Knit) con TOC flotante --- */
+    /* Web Component Markmap v1 */
+    markmap-view {
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      display: block;
+      --mm-bg: var(--bg-primary);
+      --mm-text: var(--text-normal);
+      --mm-link: var(--accent);
+    }
+    markmap-view.hidden { display: none !important; }
+    markmap-view::part(toolbar) {
+      bottom: 16px;
+      right: 16px;
+    }
+
+    /* Visor en vivo estilo RMarkdown (Knit) adaptado a tema oscuro/claro */
     #knit-viewer {
       flex: 1; display: none; height: 100%; overflow: hidden;
-      background: #ffffff; color: #2c3e50; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg-primary); color: var(--text-normal);
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
     }
     #knit-viewer.active { display: flex; }
     #knit-toc {
-      width: 220px; min-width: 180px; border-right: 1px solid #e2e8f0;
-      background: #f8fafc; padding: 18px 12px; overflow-y: auto; font-size: 13px;
+      width: 220px; min-width: 180px; border-right: 1px solid var(--border);
+      background: var(--bg-secondary); padding: 18px 12px; overflow-y: auto; font-size: 13px;
     }
-    #knit-toc h4 { margin: 0 0 10px 0; font-size: 11px; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px; }
+    #knit-toc h4 {
+      margin: 0 0 10px 0; font-size: 11px; text-transform: uppercase;
+      color: var(--text-muted); letter-spacing: 0.6px;
+    }
     #knit-toc a {
-      display: block; color: #475569; text-decoration: none; padding: 5px 8px;
-      border-radius: 4px; margin-bottom: 2px; line-height: 1.35;
+      display: block; color: var(--text-muted); text-decoration: none; padding: 5px 8px;
+      border-radius: 6px; margin-bottom: 2px; line-height: 1.35;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
-    #knit-toc a:hover { background: #e2e8f0; color: #0f172a; }
+    #knit-toc a:hover { background: var(--accent-soft); color: var(--text-normal); }
     #knit-toc a.toc-h2 { padding-left: 18px; font-size: 12.5px; }
-    #knit-toc a.toc-h3 { padding-left: 30px; font-size: 12px; color: #64748b; }
+    #knit-toc a.toc-h3 { padding-left: 30px; font-size: 12px; }
 
     #knit-content { flex: 1; overflow-y: auto; padding: 32px 40px; scroll-behavior: smooth; }
-    .knit-body { max-width: 800px; margin: 0 auto; line-height: 1.7; font-size: 15.5px; }
-    .knit-body h1 { font-size: 1.9em; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-top: 0; color: #0f172a; }
-    .knit-body h2 { font-size: 1.45em; border-bottom: 1px solid #f1f5f9; padding-bottom: 6px; margin-top: 1.6em; color: #1e293b; }
-    .knit-body h3 { font-size: 1.2em; margin-top: 1.3em; color: #334155; }
-    .knit-body img { max-width: 100%; height: auto; border-radius: 6px; display: block; margin: 16px auto; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .knit-body { max-width: 780px; margin: 0 auto; line-height: 1.75; font-size: 15.5px; }
+    .knit-body h1 { font-size: 1.9em; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 0; color: var(--text-normal); }
+    .knit-body h2 { font-size: 1.45em; border-bottom: 1px solid var(--border); padding-bottom: 6px; margin-top: 1.6em; color: var(--text-normal); }
+    .knit-body h3 { font-size: 1.2em; margin-top: 1.3em; color: var(--text-normal); }
+    .knit-body a { color: var(--accent); }
+    .knit-body img { max-width: 100%; height: auto; border-radius: 8px; display: block; margin: 16px auto; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25); }
     .knit-body table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
-    .knit-body th, .knit-body td { border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; }
-    .knit-body th { background: #f1f5f9; font-weight: 600; }
-    .knit-body tr:nth-child(even) { background: #f8fafc; }
-    .knit-body pre { background: #f1f5f9; padding: 12px 16px; border-radius: 6px; overflow-x: auto; border: 1px solid #e2e8f0; font-size: 13.5px; }
-    .knit-body code { background: #f1f5f9; padding: 2px 5px; border-radius: 4px; font-family: monospace; font-size: 0.9em; }
-    .knit-body blockquote { border-left: 4px solid var(--accent); margin: 16px 0; padding: 4px 16px; color: #475569; background: #f8fafc; }
+    .knit-body th, .knit-body td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; }
+    .knit-body th { background: var(--bg-secondary); font-weight: 600; color: var(--text-normal); }
+    .knit-body tr:nth-child(even) { background: rgba(255, 255, 255, 0.02); }
+    .knit-body pre {
+      background: var(--bg-secondary); padding: 14px 16px; border-radius: 8px;
+      overflow-x: auto; border: 1px solid var(--border); font-size: 13.5px;
+    }
+    .knit-body code {
+      background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px;
+      font-family: "JetBrains Mono", Consolas, monospace; font-size: 0.9em;
+    }
+    .knit-body pre code { padding: 0; background: transparent; }
+    .knit-body blockquote {
+      border-left: 3px solid var(--accent); margin: 16px 0; padding: 6px 16px;
+      color: var(--text-muted); background: var(--bg-secondary); border-radius: 0 6px 6px 0;
+    }
 
-    /* Columna Derecha: Metadatos, Opciones y Exportación */
-    .meta-section { display: flex; flex-direction: column; gap: 7px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
-    .meta-section h4 { margin: 0 0 3px 0; font-size: 11px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px; }
+    /* Columna Derecha: Opciones, Imágenes y Exportación */
+    .meta-section { display: flex; flex-direction: column; gap: 7px; border-bottom: 1px solid var(--border); padding-bottom: 14px; }
+    .meta-section:last-child { border-bottom: none; }
+    .meta-section h4 {
+      margin: 0 0 3px 0; font-size: 11px; text-transform: uppercase;
+      color: var(--text-muted); letter-spacing: 0.6px;
+    }
     .btn-row { display: flex; gap: 6px; }
     .btn-row button { flex: 1; }
     #images-drawer {
       display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px;
-      max-height: 200px; overflow-y: auto; margin-top: 4px;
+      max-height: 190px; overflow-y: auto; margin-top: 4px;
     }
     #images-drawer img {
-      width: 100%; height: 65px; object-fit: cover; border-radius: 4px;
+      width: 100%; height: 64px; object-fit: cover; border-radius: 6px;
       border: 1px solid var(--border); cursor: pointer; background: #fff;
     }
 
-    /* --- Barra Inferior Conmutable (Inicialmente Oculta) y Botón Sutil --- */
+    /* Barra Inferior Conmutable (Inicialmente Oculta) */
     #bottom-nav {
       position: fixed; bottom: 0; left: 0; right: 0; height: 48px;
       padding-bottom: env(safe-area-inset-bottom);
-      background: var(--bg-elevated); backdrop-filter: blur(12px);
+      background: var(--bg-elevated); backdrop-filter: blur(14px);
       border-top: 1px solid var(--border);
       display: flex; justify-content: space-around; align-items: center;
       z-index: 30; transform: translateY(105%);
@@ -266,15 +340,18 @@
     #keyboard-toolbar {
       position: fixed; left: 0; right: 0;
       bottom: var(--kb-offset, 0px);
-      height: 44px; background: var(--bg-secondary);
+      height: 48px; background: var(--bg-secondary);
       border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
-      display: flex; align-items: center; gap: 6px; padding: 0 10px;
+      display: flex; align-items: center; gap: 8px; padding: 0 12px;
       overflow-x: auto; white-space: nowrap; z-index: 35;
       scrollbar-width: none;
     }
     #keyboard-toolbar::-webkit-scrollbar { display: none; }
     #keyboard-toolbar.hidden { display: none !important; }
-    #keyboard-toolbar button { flex: 0 0 auto; padding: 5px 10px; font-size: 13px; }
+    #keyboard-toolbar button {
+      flex: 0 0 auto; min-height: 34px; min-width: 38px;
+      padding: 5px 10px; font-size: 13px; border-radius: 8px;
+    }
 
     .mobile-only { display: none !important; }
     #drawer-backdrop { display: none; }
@@ -285,6 +362,20 @@
     @media (max-width: 768px) {
       .desktop-only { display: none !important; }
       .mobile-only { display: inline-flex !important; }
+
+      #app-header { padding: 0 8px; overflow-x: visible; }
+      #active-file-breadcrumb { max-width: 85px; font-size: 12px; }
+      #save-status {
+        width: 8px; height: 8px; padding: 0; min-width: 8px;
+        border-radius: 50%; overflow: hidden; text-indent: -9999px;
+      }
+      #save-status.saved { background: #34d399; }
+      #save-status.saving { background: #fbbf24; }
+
+      .icon-btn {
+        min-width: 38px; min-height: 38px;
+        display: inline-flex; align-items: center; justify-content: center;
+      }
 
       #app-workspace {
         display: block; position: relative;
@@ -297,15 +388,19 @@
       #center-stage[data-mobile-view="viewer"] #editor-container { display: none !important; }
 
       .drawer {
-        position: fixed; top: 0; bottom: 0; width: 82vw; max-width: 310px;
-        z-index: 50; box-shadow: 0 10px 35px rgba(0,0,0,0.6);
+        position: fixed; top: 0; bottom: 0; width: 84vw; max-width: 320px;
+        z-index: 50; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.65);
       }
       #left-sidebar { left: 0; transform: translateX(-105%); }
       #right-sidebar { right: 0; transform: translateX(105%); }
       #left-sidebar.open, #right-sidebar.open { transform: translateX(0); }
 
+      .file-item { padding: 11px 14px 11px 20px; font-size: 14px; }
+      .tag-pill { padding: 5px 10px; font-size: 12px; }
+      .sb-footer button, .meta-section button, .meta-section select { min-height: 38px; font-size: 13px; }
+
       #drawer-backdrop {
-        display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+        display: block; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55);
         backdrop-filter: blur(2px); z-index: 40;
         opacity: 0; pointer-events: none; transition: opacity 0.25s;
       }
@@ -332,20 +427,27 @@
     <div class="header-group">
       <button id="btn-left-drawer" class="icon-btn" title="Mostrar/Ocultar Archivos">📁</button>
       <span id="active-file-breadcrumb">doc.md</span>
-      <span id="save-status" class="saved">Guardado</span>
+      <span id="save-status" class="saved" title="Estado de guardado">Guardado</span>
+    </div>
+
+    <!-- Selector segmentado de 3 vías exclusivo para móvil -->
+    <div class="segmented-control mobile-only" id="mobile-mode-switch" role="tablist">
+      <button data-mode="editor" class="active" title="Editor Markdown">✏️</button>
+      <button data-mode="map" title="Mapa Mental">🗺️</button>
+      <button data-mode="knit" title="Documento Knit">📄</button>
+    </div>
+
+    <!-- Controles centrales de escritorio -->
+    <div class="header-group desktop-only">
+      <button id="btn-toggle-editor-desktop" class="active" title="Mostrar/Ocultar Editor">⇄ Editor</button>
+      <button id="btn-view-mode" class="primary" title="Alternar entre Mapa Mental y Documento Maquetado (Knit)">📄 Vista Doc / Knit</button>
+      <button id="btn-fit" title="Encajar mapa">⊡ Ajustar</button>
+      <button id="btn-solid-color" title="Congelar colores por rama principal (colorDepth: 2)">Color sólido</button>
+      <button id="btn-wrap-text" title="Ajustar ancho máximo de nodo (wrapWidth)">Ajustar texto</button>
     </div>
 
     <div class="header-group">
-      <button id="btn-toggle-editor-desktop" class="desktop-only active" title="Mostrar/Ocultar Editor">⇄ Editor</button>
-      <button id="btn-switch-mobile" class="mobile-only primary" title="Alternar entre Editor y Visor">🗺️ Ver Salida</button>
-      <button id="btn-view-mode" class="primary" title="Cambiar salida en vivo entre Mapa Mental y Documento Maquetado (Knit)">📄 Vista Doc / Knit</button>
-      <button id="btn-fit" class="desktop-only" title="Encajar mapa">⊡ Ajustar</button>
-      <button id="btn-solid-color" class="desktop-only" title="Color sólido por rama">Color sólido</button>
-      <button id="btn-wrap-text" class="desktop-only" title="Ajustar ancho de texto">Ajustar texto</button>
-    </div>
-
-    <div class="header-group">
-      <button id="btn-theme" class="icon-btn" title="Cambiar Tema Claro/Oscuro">🌓</button>
+      <button id="btn-theme" class="icon-btn desktop-only" title="Cambiar Tema Claro/Oscuro">🌓</button>
       <button id="btn-cmd-top" class="icon-btn" title="Paleta de Comandos">⚡</button>
       <button id="btn-right-drawer" class="icon-btn" title="Opciones y Exportación">⚙️</button>
     </div>
@@ -369,14 +471,14 @@
       </div>
     </aside>
 
-    <!-- 2. Columna Central: Editor Markdown + Visor Dual (Mapa / Knit) -->
+    <!-- 2. Columna Central: Editor Markdown + Visor Dual (Markmap v1 / Knit) -->
     <section id="center-stage" data-mobile-view="editor">
       <div id="editor-container" class="readable-line-length">
         <textarea id="markdown"></textarea>
       </div>
       <div id="resizer" class="desktop-only"></div>
       <div id="viewer-container">
-        <svg id="mindmap"></svg>
+        <markmap-view id="mindmap" toolbar color-scheme="dark"></markmap-view>
         <div id="knit-viewer">
           <nav id="knit-toc"><h4>Contenido</h4><div id="knit-toc-list"></div></nav>
           <div id="knit-content"><article class="knit-body" id="knit-body"></article></div>
@@ -384,15 +486,39 @@
       </div>
     </section>
 
-    <!-- 3. Columna Derecha: Opciones del Mapa, Imágenes y Exportación -->
+    <!-- 3. Columna Derecha: Opciones Markmap v1, Imágenes y Exportación -->
     <aside id="right-sidebar" class="drawer">
       <div class="meta-section">
-        <h4>Opciones de Visualización</h4>
+        <h4>Markmap v1</h4>
+        <button id="btn-theme-side" class="mobile-only">🌓 Cambiar Tema Claro/Oscuro</button>
+
+        <span class="field-label">Layout</span>
+        <select id="mm-layout">
+          <option value="">Auto (Frontmatter)</option>
+          <option value="tree">Tree (Derecha)</option>
+          <option value="two-sided">Two-sided (Bilateral)</option>
+          <option value="org-chart">Org-chart (Jerárquico)</option>
+        </select>
+
+        <span class="field-label">Tema</span>
+        <select id="mm-theme">
+          <option value="">Auto (Frontmatter)</option>
+          <option value="classic">Classic</option>
+          <option value="cards">Cards</option>
+          <option value="minimal">Minimal</option>
+        </select>
+
+        <span class="field-label">Renderizador</span>
+        <select id="mm-renderer">
+          <option value="svg">SVG (Estándar)</option>
+          <option value="canvas">Canvas (Mapas grandes)</option>
+        </select>
+
         <button id="btn-fit-side">⊡ Encajar mapa en pantalla</button>
         <button id="btn-autofit">Auto-Fit al escribir</button>
         <button id="btn-solid-side">Color sólido por rama</button>
         <button id="btn-wrap-side">Ajustar ancho de nodo</button>
-        <button id="btn-expand-level">Nivel máx. desplegado</button>
+        <button id="btn-expand-level">Nivel plegado (foldLevel)</button>
         <button id="btn-line-width" class="active">Ancho lectura confortable</button>
       </div>
 
@@ -402,20 +528,21 @@
         <div class="btn-row">
           <button id="btn-insert-img">Insertar en nota</button>
           <button id="btn-upload-img">↑ Subir</button>
-          <input type="file" id="file-upload-img" accept="image/*" style="display:none"/>
+          <input type="file" id="file-upload-img" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none"/>
         </div>
         <div id="images-drawer"></div>
       </div>
 
       <div class="meta-section">
         <h4>Acciones y Exportación</h4>
-        <button id="btn-open-url">🌐 Cargar Markdown desde URL</button>
+        <button id="btn-open-url">🌐 Cargar desde URL</button>
         <div class="btn-row">
           <button id="export-svg" title="Descargar Mapa en SVG">↓ SVG</button>
-          <button id="export-html" title="Descargar Mapa Interactivo HTML">↓ Mapa HTML</button>
+          <button id="export-png" title="Descargar Mapa en PNG">↓ PNG</button>
         </div>
+        <button id="export-html" title="Descargar Mapa Interactivo HTML (Markmap v1)">↓ Mapa HTML</button>
         <div class="btn-row">
-          <button id="export-knit" class="primary" title="Descargar Documento HTML estilo RStudio Knit">↓ Knit HTML</button>
+          <button id="export-knit" class="primary" title="Descargar Documento HTML con TOC flotante">↓ Knit HTML</button>
           <button id="export-pdf" class="primary" title="Generar PDF estilo LaTeX">↓ PDF</button>
         </div>
       </div>
@@ -426,12 +553,14 @@
   <div id="keyboard-toolbar" class="hidden">
     <button data-insert="**|**"><b>B</b></button>
     <button data-insert="*|*"><i>I</i></button>
+    <button data-insert="==|==">🖍</button>
     <button data-insert="# ">H1</button>
     <button data-insert="## ">H2</button>
     <button data-insert="### ">H3</button>
     <button data-insert="- ">• Lista</button>
     <button data-insert="- [ ] ">☑ Tarea</button>
-    <button data-insert="$$\n|\n$$">∑ LaTeX</button>
+    <button data-insert="$$\n|\n$$">∑ Math</button>
+    <button data-insert=" <!-- markmap: fold -->">⤓ Fold</button>
     <button id="kb-img">🖼 Img</button>
     <button id="kb-indent">⇥ Tab</button>
     <button id="kb-close">⌨️↓</button>
@@ -442,40 +571,31 @@
   <nav id="bottom-nav">
     <button id="nav-undo" title="Deshacer cambio en editor (o ir a nota anterior)">↩ Deshacer</button>
     <button id="nav-redo" title="Rehacer cambio en editor (o ir a nota siguiente)">↪ Rehacer</button>
-    <button id="nav-files" title="Abrir/Cerrar Archivos">📁 Archivos</button>
-    <button id="nav-view" title="Alternar Vista Mapa / Vista Doc Knit">📄/🗺️ Modo</button>
-    <button id="nav-cmd" title="Paleta de Comandos">⚡ Comandos</button>
-    <button id="nav-meta" title="Abrir/Cerrar Opciones">⚙️ Opciones</button>
+    <button id="nav-files" title="Abrir/Cerrar Archivos">📁</button>
+    <button id="nav-view" title="Alternar Vista Mapa / Vista Doc Knit">📄/🗺️</button>
+    <button id="nav-cmd" title="Paleta de Comandos">⚡</button>
+    <button id="nav-meta" title="Abrir/Cerrar Opciones">⚙️</button>
   </nav>
 
-  <!-- Librerías Locales -->
-  <script src="/assets/d3.min.js"></script>
-  <script src="/assets/markmap-lib.iife.js"></script>
-  <script src="/assets/markmap-view.iife.js"></script>
-  <script src="/assets/markmap-toolbar.js"></script>
+  <!-- CodeMirror Local -->
   <script src="/assets/codemirror.js"></script>
   <script src="/assets/markdown.js"></script>
   <script src="/assets/continuelist.js"></script>
   <script src="/assets/placeholder.js"></script>
 
-  <script>
-  (async function(){
+  <!-- Motor Markmap v1 (@markmap/*) + Lógica de mdmap -->
+  <script type="module">
+    import 'https://cdn.jsdelivr.net/npm/@markmap/element@1/+esm';
+    import { mathContent, remarkMath } from 'https://cdn.jsdelivr.net/npm/@markmap/plugin-math@1/+esm';
+    import { defaultContentPlugins, toSVGString } from 'https://cdn.jsdelivr.net/npm/@markmap/render@1/+esm';
+    import { toPNG } from 'https://cdn.jsdelivr.net/npm/@markmap/canvas@1/+esm';
+
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
 
-    const { Transformer, Markmap, Toolbar, loadCSS, loadJS } = window.markmap;
-    const transformer = new Transformer();
-    const svgEl = document.getElementById('mindmap');
-    const mm = Markmap.create(svgEl);
-
-    const tb = new Toolbar();
-    if (tb.setBrand) tb.setBrand(false);
-    tb.attach(mm);
-    const tbEl = tb.render();
-    tbEl.querySelector('.mm-toolbar-brand')?.remove();
-    Object.assign(tbEl.style, { position: 'absolute', bottom: '16px', right: '16px', zIndex: 10 });
-    document.getElementById('viewer-container').appendChild(tbEl);
+    const mmView = document.getElementById('mindmap');
+    mmView.parseOptions = { plugins: [remarkMath] };
 
     const cm = CodeMirror.fromTextArea(document.getElementById('markdown'), {
       mode: 'markdown',
@@ -490,6 +610,7 @@
     let saveTimer = null;
     let isLoadingFile = false;
     let isKnitView = false;
+    let pendingFit = false;
     let allFiles = [];
     let activeTag = null;
     const navHistory = [];
@@ -497,9 +618,12 @@
 
     const state = {
       autoFit: false,
-      colorFreezeLevel: 0,
-      maxWidth: 0,
-      expandLevel: -1
+      colorDepth: 0,      // 0 = defecto; 2 = congelar por ramas principales
+      wrapWidth: 0,       // px; 0 = defecto
+      foldLevel: null,    // raíz = 0; null = todo desplegado
+      layout: '',         // '' = respeta frontmatter
+      theme: '',          // '' = respeta frontmatter
+      renderer: 'svg'
     };
 
     const statusEl = document.getElementById('save-status');
@@ -507,6 +631,12 @@
     function setStatus(text, cls) {
       statusEl.textContent = text;
       statusEl.className = cls;
+    }
+
+    function escapeHtml(str) {
+      return String(str).replace(/[&<>"']/g, m => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[m]));
     }
 
     function extractImagePaths(md) {
@@ -539,40 +669,51 @@
       return updatedMd;
     }
 
-    const palette = d3.scaleOrdinal(d3.schemeCategory10);
-    function getMarkmapOptions() {
-      const freeze = state.colorFreezeLevel;
-      const rawOpts = {
-        colorFreezeLevel: freeze,
-        maxWidth: state.maxWidth > 0 ? state.maxWidth : 0,
-        initialExpandLevel: state.expandLevel
-      };
-      const derived = window.markmap.deriveOptions ? window.markmap.deriveOptions(rawOpts) : rawOpts;
-      derived.color = (node) => {
-        const pathParts = String(node.state?.path || node.depth || '0').split('.');
-        const key = freeze > 0 ? pathParts.slice(0, freeze).join('.') : pathParts.join('.');
-        return palette(key);
-      };
-      return derived;
+    function applyMapConfig() {
+      if (state.layout) mmView.setAttribute('layout', state.layout);
+      else mmView.removeAttribute('layout');
+
+      if (state.theme) mmView.setAttribute('theme', state.theme);
+      else mmView.removeAttribute('theme');
+
+      mmView.setAttribute('renderer', state.renderer);
+
+      const isLight = document.body.classList.contains('theme-light');
+      mmView.setAttribute('color-scheme', isLight ? 'light' : 'dark');
+
+      const opts = { plugins: [...defaultContentPlugins, mathContent] };
+      if (state.colorDepth > 0) opts.colorDepth = state.colorDepth;
+      if (state.wrapWidth > 0) opts.wrapWidth = state.wrapWidth;
+      if (state.foldLevel !== null && state.foldLevel >= 0) opts.foldLevel = state.foldLevel;
+
+      mmView.options = opts;
     }
 
-    // --- Compilador de Documento Maquetado (Estilo RStudio Knit + KaTeX + TOC) ---
+    mmView.addEventListener('render', () => {
+      if (pendingFit) {
+        pendingFit = false;
+        requestAnimationFrame(() => mmView.mm?.fit());
+      }
+    });
+
+    // --- Compilador de Documento Maquetado (Estilo RStudio Knit + KaTeX + DOMPurify + TOC) ---
     function compileKnitHtml(rawMd) {
       let cleanMd = rawMd.replace(/^---\n([\s\S]*?)\n---\n?/, '');
       const mathBlocks = [];
 
       cleanMd = cleanMd.replace(/\$\$([\s\S]+?)\$\$/g, (_, tex) => {
-        const html = window.katex ? katex.renderToString(tex.trim(), { displayMode: true, throwOnError: false }) : `$$${tex}$$`;
+        const html = window.katex ? katex.renderToString(tex.trim(), { displayMode: true, throwOnError: false }) : `$$${escapeHtml(tex)}$$`;
         mathBlocks.push(html);
         return `@@MATH_BLOCK_${mathBlocks.length - 1}@@`;
       });
       cleanMd = cleanMd.replace(/\$([^\$\n]+?)\$/g, (_, tex) => {
-        const html = window.katex ? katex.renderToString(tex.trim(), { displayMode: false, throwOnError: false }) : `$${tex}$`;
+        const html = window.katex ? katex.renderToString(tex.trim(), { displayMode: false, throwOnError: false }) : `$${escapeHtml(tex)}$`;
         mathBlocks.push(html);
         return `@@MATH_BLOCK_${mathBlocks.length - 1}@@`;
       });
 
-      let bodyHtml = window.marked ? marked.parse(cleanMd) : cleanMd;
+      let bodyHtml = window.marked ? marked.parse(cleanMd) : escapeHtml(cleanMd);
+      if (window.DOMPurify) bodyHtml = DOMPurify.sanitize(bodyHtml);
       bodyHtml = bodyHtml.replace(/@@MATH_BLOCK_(\d+)@@/g, (_, idx) => mathBlocks[Number(idx)]);
 
       const tempDiv = document.createElement('div');
@@ -582,7 +723,7 @@
         const id = `sec-${i}`;
         h.id = id;
         const level = h.tagName.toLowerCase();
-        tocItems.push(`<a href="#${id}" class="toc-${level}">${h.textContent}</a>`);
+        tocItems.push(`<a href="#${id}" class="toc-${level}">${escapeHtml(h.textContent)}</a>`);
       });
 
       return { bodyHtml: tempDiv.innerHTML, tocHtml: tocItems.join('') };
@@ -592,10 +733,10 @@
       if (!isKnitView) return;
       const { bodyHtml, tocHtml } = compileKnitHtml(cm.getValue());
       document.getElementById('knit-body').innerHTML = bodyHtml;
-      document.getElementById('knit-toc-list').innerHTML = tocHtml || '<small style="color:#94a3b8">Sin encabezados</small>';
+      document.getElementById('knit-toc-list').innerHTML = tocHtml || '<small style="color:var(--text-muted)">Sin encabezados</small>';
     }
 
-    async function render(forceFit = false) {
+    function render(forceFit = false) {
       const md = cm.getValue();
 
       if (!isLoadingFile && md !== contentCache) {
@@ -616,17 +757,11 @@
       if (isKnitView) {
         updateKnitPreview();
       } else {
-        const { root, features } = transformer.transform(md);
-        const { styles, scripts } = transformer.getUsedAssets(features);
-        if (styles && loadCSS) loadCSS(styles);
-        if (scripts && loadJS) await loadJS(scripts, { getMarkmap: () => window.markmap });
-
-        const opts = getMarkmapOptions();
-        mm.setOptions(opts);
-        mm.setData(root, opts);
-
+        if (forceFit || state.autoFit) pendingFit = true;
+        applyMapConfig();
+        mmView.markdown = md;
         if (forceFit || state.autoFit) {
-          requestAnimationFrame(() => mm.fit());
+          requestAnimationFrame(() => mmView.mm?.fit());
         }
       }
 
@@ -643,21 +778,64 @@
     }
 
     cm.on('change', () => render(false));
-    if (window.ResizeObserver) new ResizeObserver(() => { if (!isKnitView) mm.fit(); }).observe(svgEl);
+    if (window.ResizeObserver) {
+      new ResizeObserver(() => {
+        if (!isKnitView && mmView.mm) mmView.mm.fit();
+      }).observe(mmView);
+    }
 
     // --- Alternar entre Mapa Mental y Documento Maquetado (Knit) ---
-    function toggleViewMode() {
-      isKnitView = !isKnitView;
+    function setViewerMode(wantKnit) {
+      isKnitView = wantKnit;
       const knitEl = document.getElementById('knit-viewer');
       const btnMode = document.getElementById('btn-view-mode');
       knitEl.classList.toggle('active', isKnitView);
-      svgEl.classList.toggle('hidden', isKnitView);
-      tbEl.style.display = isKnitView ? 'none' : '';
+      mmView.classList.toggle('hidden', isKnitView);
       btnMode.textContent = isKnitView ? '🗺️ Vista Mapa' : '📄 Vista Doc / Knit';
       render(true);
     }
+
+    function toggleViewMode() {
+      setViewerMode(!isKnitView);
+      syncMobileModeButtons();
+    }
     document.getElementById('btn-view-mode').onclick = toggleViewMode;
-    document.getElementById('nav-view').onclick = toggleViewMode;
+    document.getElementById('nav-view').onclick = () => {
+      if (window.innerWidth <= 768) {
+        setMobileMode(isKnitView ? 'map' : 'knit');
+      } else {
+        toggleViewMode();
+      }
+    };
+
+    // --- Selector Segmentado de 3 Vías (Móvil) ---
+    const centerStage = document.getElementById('center-stage');
+    const mobileModeBtns = document.querySelectorAll('#mobile-mode-switch button');
+
+    function syncMobileModeButtons() {
+      let currentMode = 'editor';
+      if (centerStage.dataset.mobileView === 'viewer') {
+        currentMode = isKnitView ? 'knit' : 'map';
+      }
+      mobileModeBtns.forEach(b => b.classList.toggle('active', b.dataset.mode === currentMode));
+    }
+
+    function setMobileMode(mode) {
+      if (mode === 'editor') {
+        centerStage.dataset.mobileView = 'editor';
+        setTimeout(() => cm.refresh(), 50);
+      } else {
+        centerStage.dataset.mobileView = 'viewer';
+        const wantKnit = mode === 'knit';
+        if (isKnitView !== wantKnit) setViewerMode(wantKnit);
+        else setTimeout(() => { if (!isKnitView) mmView.mm?.fit(); else updateKnitPreview(); }, 60);
+      }
+      syncMobileModeButtons();
+    }
+
+    mobileModeBtns.forEach(btn => {
+      btn.onclick = () => setMobileMode(btn.dataset.mode);
+    });
 
     // --- Gestión de Archivos y Árbol Lateral ---
     async function refreshSidebarMetadata() {
@@ -691,9 +869,10 @@
 
       const tagSet = new Set();
       allFiles.forEach(f => (f.tags || []).forEach(t => tagSet.add(t)));
-      tagsContainer.innerHTML = [...tagSet].map(t =>
-        `<span class="tag-pill ${activeTag === t ? 'active' : ''}" data-tag="${t}">#${t}</span>`
-      ).join('');
+      tagsContainer.innerHTML = [...tagSet].map(t => {
+        const safeTag = escapeHtml(t);
+        return `<span class="tag-pill ${activeTag === t ? 'active' : ''}" data-tag="${safeTag}">#${safeTag}</span>`;
+      }).join('');
       tagsContainer.querySelectorAll('.tag-pill').forEach(el => {
         el.onclick = () => {
           activeTag = (activeTag === el.dataset.tag) ? null : el.dataset.tag;
@@ -715,13 +894,18 @@
       });
 
       treeContainer.innerHTML = Object.keys(groups).sort().map(folder => {
-        const itemsHtml = groups[folder].map(f => `
-          <div class="file-item ${f.path === currentFile ? 'active' : ''}" data-path="${f.path}">
-            <span>📄 ${f.name.replace(/\.md$/, '')}</span>
-            <span class="file-tags">${(f.tags || []).map(t => '#' + t).join(' ')}</span>
-          </div>
-        `).join('');
-        return `<div class="folder-title">📁 ${folder}</div>${itemsHtml}`;
+        const itemsHtml = groups[folder].map(f => {
+          const safePath = escapeHtml(f.path);
+          const safeName = escapeHtml(f.name.replace(/\.md$/, ''));
+          const safeTags = (f.tags || []).map(t => '#' + escapeHtml(t)).join(' ');
+          return `
+            <div class="file-item ${f.path === currentFile ? 'active' : ''}" data-path="${safePath}">
+              <span>📄 ${safeName}</span>
+              <span class="file-tags">${safeTags}</span>
+            </div>
+          `;
+        }).join('');
+        return `<div class="folder-title">📁 ${escapeHtml(folder)}</div>${itemsHtml}`;
       }).join('');
 
       treeContainer.querySelectorAll('.file-item').forEach(el => {
@@ -748,17 +932,17 @@
       cm.clearHistory();
       isLoadingFile = false;
       setStatus('Guardado', 'saved');
-      await render(true);
+      render(true);
     }
 
     document.getElementById('sb-search').oninput = renderSidebar;
 
     document.getElementById('btn-new-file').onclick = async () => {
-      let name = prompt('Nombre del nuevo archivo (ej. clinica/insulina.md):');
+      let name = prompt('Nombre del nuevo archivo (ej. filosofia/etica.md):');
       if (!name) return;
       if (!name.endsWith('.md')) name += '.md';
       const title = name.split('/').pop().replace('.md', '');
-      const initialMd = `---\ntags: [general]\n---\n# ${title}\n\n## Apartado 1\n- Idea A`;
+      const initialMd = `---\ntags: [general]\nmarkmap:\n  layout: tree\n  theme: classic\n---\n# ${title}\n\n## Apartado 1\n- Idea A`;
       await fetch(`/api/content?file=${encodeURIComponent(name)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
@@ -770,7 +954,7 @@
 
     document.getElementById('btn-rename-file').onclick = async () => {
       if (currentFile === 'doc.md') return alert('El archivo base doc.md no se puede renombrar.');
-      const newName = prompt('Nuevo nombre o ruta (ej. clinica/protocolo.md):', currentFile);
+      const newName = prompt('Nuevo nombre o ruta (ej. carpeta/nota.md):', currentFile);
       if (!newName || newName === currentFile) return;
       const res = await fetch(`/api/rename?old=${encodeURIComponent(currentFile)}&new=${encodeURIComponent(newName)}`, {
         method: 'POST'
@@ -795,7 +979,7 @@
     async function refreshImageList(selected = '') {
       const imgs = await fetch('/api/images').then(r => r.json());
       imgSelect.innerHTML = '<option value="">-- Seleccionar imagen --</option>' +
-        imgs.map(i => `<option value="/images/${i}">${i}</option>`).join('');
+        imgs.map(i => `<option value="/images/${escapeHtml(i)}">${escapeHtml(i)}</option>`).join('');
       if (selected) imgSelect.value = `/images/${selected}`;
     }
     await refreshImageList();
@@ -813,10 +997,14 @@
           body: reader.result
         });
         if (res.ok) {
-          await refreshImageList(file.name);
-          const nameNoExt = file.name.replace(/\.[^.]+$/, '');
-          cm.replaceSelection(`![${nameNoExt}](/images/${file.name})`);
+          const respText = (await res.text()).trim();
+          const savedName = (respText && respText !== 'OK') ? respText : file.name;
+          await refreshImageList(savedName);
+          const nameNoExt = savedName.replace(/\.[^.]+$/, '');
+          cm.replaceSelection(`![${nameNoExt}](/images/${savedName})`);
           cm.focus();
+        } else {
+          alert('Formato no permitido o error al subir la imagen.');
         }
         fileUploadImg.value = '';
       };
@@ -852,7 +1040,7 @@
         backdrop.classList.toggle('visible', isOpen);
       } else {
         workspace.classList.toggle('hide-left');
-        setTimeout(() => { if (!isKnitView) mm.fit(); }, 220);
+        setTimeout(() => { if (!isKnitView) mmView.mm?.fit(); }, 220);
       }
     }
 
@@ -863,7 +1051,7 @@
         backdrop.classList.toggle('visible', isOpen);
       } else {
         workspace.classList.toggle('hide-right');
-        setTimeout(() => { if (!isKnitView) mm.fit(); }, 220);
+        setTimeout(() => { if (!isKnitView) mmView.mm?.fit(); }, 220);
       }
     }
 
@@ -872,32 +1060,26 @@
     document.getElementById('btn-right-drawer').onclick = toggleRightSidebar;
     document.getElementById('nav-meta').onclick = toggleRightSidebar;
 
-    // Alternar Vista en Móvil (Editor <-> Visor) y en Escritorio
-    const centerStage = document.getElementById('center-stage');
-    const btnSwitchMobile = document.getElementById('btn-switch-mobile');
-    function switchMobileView() {
-      const current = centerStage.dataset.mobileView;
-      const next = current === 'editor' ? 'viewer' : 'editor';
-      centerStage.dataset.mobileView = next;
-      btnSwitchMobile.textContent = next === 'editor' ? '🗺️ Ver Salida' : '✏️ Editar MD';
-      if (next === 'viewer') setTimeout(() => { if (!isKnitView) mm.fit(); else updateKnitPreview(); }, 60);
-      else setTimeout(() => cm.refresh(), 60);
-    }
-    btnSwitchMobile.onclick = switchMobileView;
-
     document.getElementById('btn-toggle-editor-desktop').onclick = function() {
       const ed = document.getElementById('editor-container');
       ed.classList.toggle('hidden');
       this.classList.toggle('active', !ed.classList.contains('hidden'));
-      setTimeout(() => { if (!isKnitView) mm.fit(); }, 50);
+      setTimeout(() => { if (!isKnitView) mmView.mm?.fit(); }, 50);
     };
 
-    document.getElementById('btn-theme').onclick = () => {
+    function toggleTheme() {
       document.body.classList.toggle('theme-light');
-    };
+      applyMapConfig();
+    }
+    document.getElementById('btn-theme').onclick = toggleTheme;
+    document.getElementById('btn-theme-side').onclick = () => { toggleTheme(); closeMobileDrawers(); };
 
-    // --- Opciones de Markmap ---
-    const fitAction = () => { mm.fit(); closeMobileDrawers(); };
+    // --- Selectores y Opciones de Markmap v1 ---
+    document.getElementById('mm-layout').onchange = (e) => { state.layout = e.target.value; render(true); };
+    document.getElementById('mm-theme').onchange = (e) => { state.theme = e.target.value; render(true); };
+    document.getElementById('mm-renderer').onchange = (e) => { state.renderer = e.target.value; render(true); };
+
+    const fitAction = () => { mmView.mm?.fit(); closeMobileDrawers(); };
     document.getElementById('btn-fit').onclick = fitAction;
     document.getElementById('btn-fit-side').onclick = fitAction;
 
@@ -907,23 +1089,23 @@
     };
 
     function toggleSolidColor() {
-      state.colorFreezeLevel = state.colorFreezeLevel ? 0 : 2;
-      document.getElementById('btn-solid-color').classList.toggle('active', state.colorFreezeLevel > 0);
-      document.getElementById('btn-solid-side').classList.toggle('active', state.colorFreezeLevel > 0);
+      state.colorDepth = state.colorDepth ? 0 : 2;
+      document.getElementById('btn-solid-color').classList.toggle('active', state.colorDepth > 0);
+      document.getElementById('btn-solid-side').classList.toggle('active', state.colorDepth > 0);
       render(false);
     }
     document.getElementById('btn-solid-color').onclick = toggleSolidColor;
     document.getElementById('btn-solid-side').onclick = toggleSolidColor;
 
     function promptWrapText() {
-      const current = state.maxWidth > 0 ? state.maxWidth : '';
-      const input = prompt('Ancho máximo de nodo en píxeles (ej. 250, o vacío para desactivar):', current);
+      const current = state.wrapWidth > 0 ? state.wrapWidth : '';
+      const input = prompt('Ancho máximo de nodo en píxeles (wrapWidth, ej. 260 o vacío para desactivar):', current);
       if (input === null) return;
       const n = parseInt(input, 10);
-      state.maxWidth = (isNaN(n) || n <= 0) ? 0 : n;
-      const label = state.maxWidth > 0 ? `Ancho: ${state.maxWidth}px` : 'Ajustar texto';
-      document.getElementById('btn-wrap-text').classList.toggle('active', state.maxWidth > 0);
-      document.getElementById('btn-wrap-side').classList.toggle('active', state.maxWidth > 0);
+      state.wrapWidth = (isNaN(n) || n <= 0) ? 0 : n;
+      const label = state.wrapWidth > 0 ? `Ancho: ${state.wrapWidth}px` : 'Ajustar texto';
+      document.getElementById('btn-wrap-text').classList.toggle('active', state.wrapWidth > 0);
+      document.getElementById('btn-wrap-side').classList.toggle('active', state.wrapWidth > 0);
       document.getElementById('btn-wrap-text').textContent = label;
       render(true);
     }
@@ -931,14 +1113,28 @@
     document.getElementById('btn-wrap-side').onclick = promptWrapText;
 
     document.getElementById('btn-expand-level').onclick = function() {
-      const current = state.expandLevel > 0 ? state.expandLevel : '';
-      const input = prompt('Nivel máximo desplegado (vacío para todos):', current);
+      const current = state.foldLevel !== null ? state.foldLevel : '';
+      const input = prompt('Nivel de plegado (foldLevel: raíz = 0, ramas = 1, o vacío para desplegar todo):', current);
       if (input === null) return;
-      const n = parseInt(input, 10);
-      state.expandLevel = isNaN(n) ? -1 : n;
-      this.classList.toggle('active', state.expandLevel > 0);
-      this.textContent = state.expandLevel > 0 ? `Nivel máx: ${state.expandLevel}` : 'Nivel máx. desplegado';
-      render(true);
+      const trimmed = input.trim();
+      if (trimmed === '') {
+        state.foldLevel = null;
+        this.classList.remove('active');
+        this.textContent = 'Nivel plegado (foldLevel)';
+        applyMapConfig();
+        mmView.mm?.expandAll();
+        requestAnimationFrame(() => mmView.mm?.fit());
+        return;
+      }
+      const n = parseInt(trimmed, 10);
+      if (!isNaN(n) && n >= 0) {
+        state.foldLevel = n;
+        this.classList.add('active');
+        this.textContent = `foldLevel: ${n}`;
+        applyMapConfig();
+        mmView.mm?.foldToLevel(n);
+        requestAnimationFrame(() => mmView.mm?.fit());
+      }
     };
 
     document.getElementById('btn-line-width').onclick = function() {
@@ -961,7 +1157,6 @@
       btnToggleBottom.textContent = isVis ? '⌄ Ocultar' : '⌃ Barra';
     };
 
-    // Deshacer / Rehacer en el editor (o navegar historial de notas si no hay cambios que deshacer)
     document.getElementById('nav-undo').onclick = () => {
       if (cm.historySize().undo > 0) {
         cm.undo();
@@ -989,18 +1184,23 @@
     const cmdResults = document.getElementById('cmd-results');
 
     const commands = [
-      { name: '📄/🗺️ Alternar Salida: Mapa Mental / Documento Knit', action: () => toggleViewMode() },
-      { name: '📱 Alternar Editor / Visor (Móvil)', action: () => switchMobileView() },
-      { name: '⊡ Encajar Mapa en Pantalla', action: () => mm.fit() },
+      { name: '✏️ Ir al Editor (Móvil)', action: () => setMobileMode('editor') },
+      { name: '🗺️ Ver Mapa Mental', action: () => window.innerWidth <= 768 ? setMobileMode('map') : setViewerMode(false) },
+      { name: '📄 Ver Documento Knit', action: () => window.innerWidth <= 768 ? setMobileMode('knit') : setViewerMode(true) },
+      { name: '⊡ Encajar Mapa en Pantalla', action: () => mmView.mm?.fit() },
+      { name: '↔️ Layout: Two-sided (Bilateral)', action: () => { document.getElementById('mm-layout').value = 'two-sided'; state.layout = 'two-sided'; render(true); } },
+      { name: '🏛️ Layout: Org-chart (Jerárquico)', action: () => { document.getElementById('mm-layout').value = 'org-chart'; state.layout = 'org-chart'; render(true); } },
+      { name: '🃏 Tema: Cards', action: () => { document.getElementById('mm-theme').value = 'cards'; state.theme = 'cards'; render(true); } },
       { name: '🎨 Alternar Color Sólido por Rama', action: () => toggleSolidColor() },
-      { name: '📏 Configurar Ancho de Texto en Nodos', action: () => promptWrapText() },
-      { name: '🌓 Cambiar Tema Oscuro / Claro', action: () => document.body.classList.toggle('theme-light') },
+      { name: '📏 Configurar Ancho de Texto (wrapWidth)', action: () => promptWrapText() },
+      { name: '🌓 Cambiar Tema Oscuro / Claro', action: () => toggleTheme() },
       { name: '➕ Crear Nueva Nota Markdown', action: () => document.getElementById('btn-new-file').click() },
       { name: '✏️ Renombrar Nota Actual', action: () => document.getElementById('btn-rename-file').click() },
-      { name: '⬇️ Exportar Documento HTML Estilo RStudio Knit (con TOC)', action: () => document.getElementById('export-knit').click() },
-      { name: '⬇️ Exportar Documento a PDF Estilo LaTeX', action: () => document.getElementById('export-pdf').click() },
+      { name: '⬇️ Exportar Mapa a SVG', action: () => document.getElementById('export-svg').click() },
+      { name: '⬇️ Exportar Mapa a PNG', action: () => document.getElementById('export-png').click() },
       { name: '⬇️ Exportar Mapa Interactivo a HTML', action: () => document.getElementById('export-html').click() },
-      { name: '⬇️ Exportar Mapa a SVG', action: () => document.getElementById('export-svg').click() }
+      { name: '⬇️ Exportar Documento HTML Estilo RStudio Knit', action: () => document.getElementById('export-knit').click() },
+      { name: '⬇️ Exportar Documento a PDF Estilo LaTeX', action: () => document.getElementById('export-pdf').click() }
     ];
 
     function openCommandPalette() {
@@ -1023,10 +1223,11 @@
 
       let html = '';
       matchedCmds.forEach((c, idx) => {
-        html += `<div class="cmd-item" data-type="cmd" data-idx="${idx}"><span>${c.name}</span><small>Comando</small></div>`;
+        html += `<div class="cmd-item" data-type="cmd" data-idx="${idx}"><span>${escapeHtml(c.name)}</span><small>Comando</small></div>`;
       });
       matchedFiles.forEach(f => {
-        html += `<div class="cmd-item" data-type="file" data-path="${f.path}"><span>📄 ${f.path}</span><small>Abrir nota</small></div>`;
+        const safePath = escapeHtml(f.path);
+        html += `<div class="cmd-item" data-type="file" data-path="${safePath}"><span>📄 ${safePath}</span><small>Abrir nota</small></div>`;
       });
       cmdResults.innerHTML = html || '<div style="padding:12px;color:var(--text-muted)">Sin resultados</div>';
 
@@ -1079,6 +1280,19 @@
       }
     }, { passive: true });
 
+    // --- Autohide de cabecera en scroll móvil ---
+    let lastScrollTop = 0;
+    cm.on('scroll', (instance) => {
+      if (window.innerWidth > 768) return;
+      const st = instance.getScrollInfo().top;
+      if (st > lastScrollTop + 20 && st > 70) {
+        document.body.classList.add('bars-hidden');
+      } else if (st < lastScrollTop - 12 || st <= 10) {
+        document.body.classList.remove('bars-hidden');
+      }
+      lastScrollTop = st <= 0 ? 0 : st;
+    });
+
     // --- Barra Contextual sobre el Teclado Virtual ---
     const kbToolbar = document.getElementById('keyboard-toolbar');
     cm.on('focus', () => {
@@ -1129,26 +1343,16 @@
       const onUp = () => {
         window.removeEventListener('mousemove', onMove);
         window.removeEventListener('mouseup', onUp);
-        if (!isKnitView) mm.fit();
+        if (!isKnitView) mmView.mm?.fit();
       };
       window.addEventListener('mousemove', onMove);
       window.addEventListener('mouseup', onUp);
     });
 
-    // --- 4 Motores de Exportación: SVG, Mapa HTML, Knit HTML y PDF LaTeX ---
-    document.getElementById('export-svg').onclick = async () => {
-      const cloneSvg = svgEl.cloneNode(true);
-      cloneSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-      cloneSvg.setAttribute('width', svgEl.clientWidth || 1200);
-      cloneSvg.setAttribute('height', svgEl.clientHeight || 800);
-      const imgs = cloneSvg.querySelectorAll('img');
-      for (const img of imgs) {
-        const src = img.getAttribute('src');
-        if (src && !src.startsWith('data:')) {
-          try { img.setAttribute('src', await urlToDataURI(src)); } catch(e){}
-        }
-      }
-      const svgData = new XMLSerializer().serializeToString(cloneSvg);
+    // --- 5 Motores de Exportación: SVG, PNG, Mapa HTML (v1), Knit HTML y PDF LaTeX ---
+    document.getElementById('export-svg').onclick = () => {
+      if (!mmView.mm?.result) return alert('Abre la vista de mapa al menos una vez antes de exportar.');
+      const svgData = toSVGString(mmView.mm.result);
       const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -1158,22 +1362,48 @@
       URL.revokeObjectURL(url);
     };
 
+    document.getElementById('export-png').onclick = async () => {
+      if (!mmView.mm?.result) return alert('Abre la vista de mapa al menos una vez antes de exportar.');
+      const scheme = document.body.classList.contains('theme-light') ? 'light' : 'dark';
+      const pngOut = await toPNG(mmView.mm.result, { colorScheme: scheme });
+      const blob = pngOut instanceof Blob ? pngOut : new Blob([pngOut], { type: 'image/png' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${currentFile.replace('.md', '').replace(/\//g, '_')}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+
     document.getElementById('export-html').onclick = async () => {
-      const rawMd = cm.getValue();
-      const embeddedMd = await embedImagesInMarkdown(rawMd);
-      const [d3js, libjs, viewjs, cssTB, jsTB] = await Promise.all([
-        fetch('/assets/d3.min.js').then(r => r.text()),
-        fetch('/assets/markmap-lib.iife.js').then(r => r.text()),
-        fetch('/assets/markmap-view.iife.js').then(r => r.text()),
-        fetch('/assets/markmap-toolbar.css').then(r => r.text()),
-        fetch('/assets/markmap-toolbar.js').then(r => r.text()),
-      ]);
-      const exportOptions = JSON.stringify({
-        colorFreezeLevel: state.colorFreezeLevel > 0 ? state.colorFreezeLevel : 0,
-        maxWidth: state.maxWidth > 0 ? state.maxWidth : 0,
-        initialExpandLevel: state.expandLevel
-      });
-      const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>${currentFile}</title><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"/><script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"><\/script><style>*{margin:0;padding:0;box-sizing:border-box}html,body,#mindmap{width:100vw;height:100vh;display:block;font-family:sans-serif}svg#mindmap img{max-height:160px;width:auto;border-radius:4px;display:block;margin:4px 0}.mm-toolbar-brand{display:none!important}${cssTB}</style></head><body><svg id="mindmap"></svg><script>${d3js}<\/script><script>${libjs}<\/script><script>${viewjs}<\/script><script>${jsTB}<\/script><script>(async function(){const{Transformer,Markmap,Toolbar,loadCSS,loadJS,deriveOptions}=window.markmap;const transformer=new Transformer();const svgEl=document.getElementById("mindmap");const rawOpts=${exportOptions};const opts=deriveOptions?deriveOptions(rawOpts):rawOpts;const mm=Markmap.create(svgEl,opts);const{root,features}=transformer.transform(${JSON.stringify(embeddedMd)});const{styles,scripts}=transformer.getUsedAssets(features);if(styles&&loadCSS)loadCSS(styles);if(scripts&&loadJS)await loadJS(scripts,{getMarkmap:()=>window.markmap});mm.setData(root,opts);setTimeout(()=>mm.fit(),50);window.addEventListener("resize",()=>mm.fit());const tb=new Toolbar();if(tb.setBrand)tb.setBrand(false);tb.attach(mm);const el=tb.render();el.querySelector(".mm-toolbar-brand")?.remove();Object.assign(el.style,{position:"absolute",bottom:"20px",right:"20px"});document.body.appendChild(el);})();<\/script></body></html>`;
+      const embeddedMd = await embedImagesInMarkdown(cm.getValue());
+      const safeMd = embeddedMd.replace(/<\/script>/gi, '<\\/script>');
+      const scheme = document.body.classList.contains('theme-light') ? 'light' : 'dark';
+      const layoutAttr = state.layout ? ` data-layout="${escapeHtml(state.layout)}"` : '';
+      const themeAttr = state.theme ? ` data-theme="${escapeHtml(state.theme)}"` : '';
+      const title = escapeHtml(currentFile.replace('.md', ''));
+
+      const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>${title} - mdmap</title>
+  <style>
+    html, body { margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden; background: ${scheme === 'dark' ? '#16171b' : '#ffffff'}; }
+    .markmap { width: 100vw; height: 100vh; }
+  </style>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@markmap/autoloader@1/+esm"><\/script>
+</head>
+<body>
+  <div class="markmap" data-toolbar data-math data-color-scheme="${scheme}"${layoutAttr}${themeAttr}>
+    <script type="text/markdown">
+${safeMd}
+    <\/script>
+  </div>
+</body>
+</html>`;
+
       const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -1186,7 +1416,7 @@
     document.getElementById('export-knit').onclick = async () => {
       const embeddedMd = await embedImagesInMarkdown(cm.getValue());
       const { bodyHtml, tocHtml } = compileKnitHtml(embeddedMd);
-      const title = currentFile.replace('.md', '').split('/').pop();
+      const title = escapeHtml(currentFile.replace('.md', '').split('/').pop());
 
       const knitDoc = `<!DOCTYPE html>
 <html lang="es">
@@ -1214,7 +1444,7 @@
     tr:nth-child(even) { background: #f8fafc; }
     pre { background: #f1f5f9; padding: 14px; border-radius: 6px; overflow-x: auto; border: 1px solid #e2e8f0; }
     code { background: #f1f5f9; padding: 2px 5px; border-radius: 4px; font-family: monospace; }
-    blockquote { border-left: 4px solid #3b82f6; margin: 16px 0; padding: 6px 18px; background: #f8fafc; color: #475569; }
+    blockquote { border-left: 4px solid #7c6cf6; margin: 16px 0; padding: 6px 18px; background: #f8fafc; color: #475569; }
     @media (max-width: 768px) { nav#toc { display: none; } main { margin-left: 0; padding: 20px; } }
   </style>
 </head>
@@ -1236,7 +1466,7 @@
     document.getElementById('export-pdf').onclick = async () => {
       const embeddedMd = await embedImagesInMarkdown(cm.getValue());
       const { bodyHtml, tocHtml } = compileKnitHtml(embeddedMd);
-      const title = currentFile.replace('.md', '').split('/').pop();
+      const title = escapeHtml(currentFile.replace('.md', '').split('/').pop());
 
       const printWin = window.open('', '_blank');
       printWin.document.write(`<!DOCTYPE html>
@@ -1276,7 +1506,6 @@
     };
 
     await loadFileList('doc.md');
-  })();
   </script>
 </body>
 </html>

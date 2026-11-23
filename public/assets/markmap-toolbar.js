@@ -210,6 +210,16 @@
           });
         }
       });
+      this.register({
+        id: "dark",
+        title: "Toggle dark theme",
+        content: _Toolbar.icon(
+          "M10 4a6 6 0 0 0 0 12a6 6 0 0 0 0 -12v2a4 4 0 0 1 0 8z"
+        ),
+        onClick: () => {
+          document.documentElement.classList.toggle("markmap-dark");
+        }
+      });
       this.render();
     }
     static create(mm) {
@@ -226,6 +236,7 @@
       };
       return /* @__PURE__ */ jsx("svg", { width: "20", height: "20", viewBox: "0 0 20 20", children: /* @__PURE__ */ jsx("path", { ...attrs, d: path }) });
     }
+    /** @deprecated Set `showBrand` instead. */
     setBrand(show) {
       this.showBrand = show;
       return this.render();
@@ -273,7 +284,8 @@
     "zoomIn",
     "zoomOut",
     "fit",
-    "recurse"
+    "recurse",
+    "dark"
   ];
   let Toolbar = _Toolbar;
   exports.Toolbar = Toolbar;

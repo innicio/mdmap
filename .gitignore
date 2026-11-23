@@ -8,6 +8,7 @@ yarn-error.log*
 .env
 .DS_Store
 Thumbs.db
+docker-compose.override.yml
 
 # --- Datos de desarrollo (Notas Markdown e Imágenes locales) ---
 # Omitimos esto para que Git no suba tus documentos personales ni imágenes privadas a GitHub.
