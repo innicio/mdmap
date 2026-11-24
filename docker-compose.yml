@@ -11,6 +11,7 @@ services:
     volumes:
       - ./content:/app/content
       - ./images:/app/images
+      - ./data:/app/data
       - ./public:/app/public
       - ./server.js:/app/server.js
     read_only: true

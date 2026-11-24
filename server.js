@@ -1,39 +1,73 @@
 const express = require('express');
-const fs = require('fs');
-const path = require('path');
+const fs = require('node:fs');
+const path = require('node:path');
+const auth = require('./auth');
 
 const app = express();
-const IS_PROD = process.env.NODE_ENV === 'production';
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || ''; // Ej: https://mdmap.tudominio.es
-const REQUIRE_CF_ACCESS = process.env.REQUIRE_CF_ACCESS === 'true';
+const PORT = Number(process.env.PORT || 9000);
+const NODE_ENV = process.env.NODE_ENV || 'development';
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '';
 
+const PUBLIC_DIR = path.resolve(__dirname, 'public');
 const CONTENT_DIR = path.resolve(__dirname, 'content');
 const IMAGES_DIR = path.resolve(__dirname, 'images');
-const PUBLIC_DIR = path.resolve(__dirname, 'public');
+
+const ALLOWED_IMG_EXT = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp']);
+const MAX_IMG_BYTES = 8 * 1024 * 1024; // 8 MB
 
 fs.mkdirSync(CONTENT_DIR, { recursive: true });
 fs.mkdirSync(IMAGES_DIR, { recursive: true });
 
-// 1. Red y Proxy tras Cloudflare Tunnel (solo redes privadas de Docker)
-app.disable('x-powered-by');
-app.set('trust proxy', process.env.TRUSTED_PROXY || 'loopback, linklocal, uniquelocal');
+if (process.env.TRUSTED_PROXY) {
+  app.set('trust proxy', process.env.TRUSTED_PROXY);
+}
 
-// 2. Cabeceras de Seguridad
+// ============================================================================
+// 1. Migración automática de archivos legacy a usr_admin (idempotente)
+// ============================================================================
+function migrateLegacyToAdmin() {
+  const adminContent = path.join(CONTENT_DIR, 'usr_admin');
+  const adminImages = path.join(IMAGES_DIR, 'usr_admin');
+  fs.mkdirSync(adminContent, { recursive: true });
+  fs.mkdirSync(adminImages, { recursive: true });
+
+  for (const entry of fs.readdirSync(CONTENT_DIR)) {
+    if (entry.startsWith('usr_') || entry.startsWith('.')) continue;
+    const src = path.join(CONTENT_DIR, entry);
+    const dest = path.join(adminContent, entry);
+    if (!fs.existsSync(dest)) {
+      fs.renameSync(src, dest);
+    }
+  }
+
+  for (const entry of fs.readdirSync(IMAGES_DIR)) {
+    if (entry.startsWith('usr_') || entry.startsWith('.')) continue;
+    const src = path.join(IMAGES_DIR, entry);
+    const dest = path.join(adminImages, entry);
+    if (!fs.existsSync(dest)) {
+      fs.renameSync(src, dest);
+    }
+  }
+}
+
+// ============================================================================
+// 2. Cabeceras de seguridad (CSP estricta 'self') y protección CSRF básica
+// ============================================================================
+app.disable('x-powered-by');
+
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=(), payment=()');
-  // Nota: si alojas KaTeX y Marked en /assets/, elimina https://cdn.jsdelivr.net de esta CSP
+  res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader(
     'Content-Security-Policy',
     [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
-      "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
-      "font-src 'self' data: https://cdn.jsdelivr.net",
+      "script-src 'self' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline'",
+      "font-src 'self' data:",
       "img-src 'self' data: blob:",
-      "connect-src 'self' https://cdn.jsdelivr.net",
+      "connect-src 'self'",
       "frame-ancestors 'none'",
       "base-uri 'self'"
     ].join('; ')
@@ -41,205 +75,266 @@ app.use((req, res, next) => {
   next();
 });
 
-// 3. Control de Origin (CORS + anti-CSRF) y verificación Cloudflare Access en /api
-app.use('/api', (req, res, next) => {
+app.use((req, res, next) => {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
   const origin = req.headers.origin;
-  if (ALLOWED_ORIGIN && origin) {
-    if (origin !== ALLOWED_ORIGIN) {
-      return res.status(403).json({ error: 'Origen no autorizado' });
-    }
-    res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
-    res.setHeader('Vary', 'Origin');
-  }
-
-  // Bloquear mutaciones sin Origin válido en producción
-  if (IS_PROD && ALLOWED_ORIGIN && ['POST', 'PUT', 'DELETE'].includes(req.method)) {
-    if (origin !== ALLOWED_ORIGIN) {
-      return res.status(403).json({ error: 'Petición bloqueada por política de origen' });
-    }
-  }
-
-  // Defensa en profundidad si se usa Cloudflare Access
-  if (REQUIRE_CF_ACCESS && !req.headers['cf-access-authenticated-user-email']) {
-    return res.status(401).json({ error: 'Autenticación requerida' });
+  if (ALLOWED_ORIGIN && origin && origin !== ALLOWED_ORIGIN) {
+    return res.status(403).json({ error: 'Origen no permitido' });
   }
   next();
 });
 
-// 4. Archivos estáticos seguros (dotfiles bloqueados y sandbox en /images)
-app.use(express.static(PUBLIC_DIR, { dotfiles: 'deny' }));
-app.use('/images', (req, res, next) => {
-  res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
-  res.setHeader('X-Content-Type-Options', 'nosniff');
+// Rate limiter en memoria para /api/auth/login y /api/auth/register
+const authAttempts = new Map();
+function rateLimitAuth(req, res, next) {
+  const ip = req.ip || 'unknown';
+  const now = Date.now();
+  const windowMs = 15 * 60 * 1000;
+  const maxAttempts = 20;
+
+  const record = authAttempts.get(ip) || { count: 0, resetAt: now + windowMs };
+  if (now > record.resetAt) {
+    record.count = 0;
+    record.resetAt = now + windowMs;
+  }
+  record.count += 1;
+  authAttempts.set(ip, record);
+
+  if (record.count > maxAttempts) {
+    return res.status(429).json({ error: 'Demasiados intentos. Espera unos minutos.' });
+  }
   next();
-}, express.static(IMAGES_DIR, { dotfiles: 'deny' }));
+}
 
-app.use(express.json({ limit: '2mb' }));
-app.use(express.text({ type: 'text/*', limit: '5mb' }));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.text({ type: 'text/plain', limit: '12mb' }));
 
-// 5. Validación estricta contra Path Traversal
-function resolveSafeMdPath(relPath = 'doc.md') {
-  if (typeof relPath !== 'string' || relPath.includes('\0')) {
-    throw new Error('Ruta inválida');
-  }
-  let clean = relPath.trim().replace(/^\/+/, '');
+// ============================================================================
+// 3. Helpers de aislamiento de archivos por usuario (Anti-Path Traversal)
+// ============================================================================
+function getUserDirs(userId) {
+  const safeId = String(userId || '').replace(/[^a-zA-Z0-9_-]/g, '');
+  if (!safeId) throw new Error('ID de usuario inválido');
+  const contentRoot = path.join(CONTENT_DIR, safeId);
+  const imagesRoot = path.join(IMAGES_DIR, safeId);
+  fs.mkdirSync(contentRoot, { recursive: true });
+  fs.mkdirSync(imagesRoot, { recursive: true });
+  return { contentRoot, imagesRoot };
+}
+
+function resolveSafeMdPath(userId, relPathRaw) {
+  const { contentRoot } = getUserDirs(userId);
+  let clean = String(relPathRaw || 'doc.md').replace(/\\/g, '/').replace(/^\/+/, '');
   if (!clean.endsWith('.md')) clean += '.md';
-  const resolved = path.resolve(CONTENT_DIR, clean);
-  if (!resolved.startsWith(CONTENT_DIR + path.sep)) {
-    throw new Error('Acceso fuera del directorio permitido');
+  const resolved = path.resolve(contentRoot, clean);
+  if (resolved !== contentRoot && !resolved.startsWith(contentRoot + path.sep)) {
+    return null;
   }
-  return resolved;
+  return { resolved, rel: path.relative(contentRoot, resolved).replace(/\\/g, '/') };
 }
 
-// 6. Validación de Magic Bytes reales para imágenes (PNG, JPEG, GIF, WebP; bloquea SVG)
-function detectImageType(buf) {
-  if (!Buffer.isBuffer(buf) || buf.length < 12) return null;
-  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return 'png';
-  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'jpg';
-  if (buf.subarray(0, 4).toString('ascii') === 'GIF8') return 'gif';
-  if (
-    buf.subarray(0, 4).toString('ascii') === 'RIFF' &&
-    buf.subarray(8, 12).toString('ascii') === 'WEBP'
-  ) return 'webp';
-  return null;
+function resolveSafeImgPath(userId, filenameRaw) {
+  const { imagesRoot } = getUserDirs(userId);
+  const base = path.basename(String(filenameRaw || ''));
+  const ext = path.extname(base).toLowerCase();
+  if (!base || !ALLOWED_IMG_EXT.has(ext)) return null;
+  const safeName = base.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const resolved = path.resolve(imagesRoot, safeName);
+  if (!resolved.startsWith(imagesRoot + path.sep)) return null;
+  return { resolved, safeName };
 }
 
-function scanMarkdownDir(dir, baseDir = dir) {
-  let results = [];
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
-  for (const entry of entries) {
+function extractTags(mdText) {
+  const match = mdText.match(/^---\n([\s\S]*?)\n---/);
+  if (!match) return [];
+  const tagLine = match[1].match(/^tags:\s*\[([^\]]*)\]/m);
+  if (!tagLine) return [];
+  return tagLine[1]
+    .split(',')
+    .map((t) => t.trim().replace(/^['"]|['"]$/g, ''))
+    .filter(Boolean);
+}
+
+function walkMarkdownFiles(dir, baseDir) {
+  const results = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (entry.name.startsWith('.')) continue;
-    const fullPath = path.join(dir, entry.name);
+    const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      results = results.concat(scanMarkdownDir(fullPath, baseDir));
+      results.push(...walkMarkdownFiles(full, baseDir));
     } else if (entry.isFile() && entry.name.endsWith('.md')) {
-      const relPath = path.relative(baseDir, fullPath).replace(/\\/g, '/');
-      const folder = path.dirname(relPath) === '.' ? '' : path.dirname(relPath);
-      const head = fs.readFileSync(fullPath, 'utf8').split('\n').slice(0, 15).join('\n');
-      const tags = new Set();
-      const yamlMatch = head.match(/tags:\s*\[([^\]]+)\]/i);
-      if (yamlMatch) {
-        yamlMatch[1].split(',').forEach(t => tags.add(t.trim().replace(/^['"#]+|['"]+$/g, '')));
-      }
-      const hashMatches = head.match(/(?:^|\s)#([a-zA-Z0-9_-]+)/g);
-      if (hashMatches) {
-        hashMatches.forEach(t => tags.add(t.trim().substring(1)));
-      }
-      results.push({ path: relPath, name: entry.name, folder, tags: [...tags].filter(Boolean) });
+      const rel = path.relative(baseDir, full).replace(/\\/g, '/');
+      const folder = path.dirname(rel) === '.' ? '' : path.dirname(rel);
+      let tags = [];
+      try {
+        tags = extractTags(fs.readFileSync(full, 'utf8'));
+      } catch {}
+      results.push({ path: rel, name: entry.name, folder, tags });
     }
   }
   return results;
 }
 
-app.get('/api/files', (req, res) => {
-  let files = scanMarkdownDir(CONTENT_DIR);
-  if (files.length === 0) {
-    fs.writeFileSync(
-      path.join(CONTENT_DIR, 'doc.md'),
-      '---\ntags: [general]\n---\n# Mi Mapa Mental\n\n## Rama 1\n- Elemento A',
-      'utf8'
-    );
-    files = scanMarkdownDir(CONTENT_DIR);
+function ensureUserWelcomeDoc(userId, username) {
+  const target = resolveSafeMdPath(userId, 'doc.md');
+  if (target && !fs.existsSync(target.resolved)) {
+    const welcome = `---\ntags: [inicio]\nmarkmap:\n  layout: tree\n  theme: classic\n---\n# Bienvenido a mdmap, ${username}\n\n## Primeros pasos\n- Crea nuevas notas desde el panel izquierdo\n- Usa la barra derecha para cambiar tema, layout y exportar\n`;
+    fs.writeFileSync(target.resolved, welcome, 'utf8');
   }
-  res.json(files.sort((a, b) => a.path.localeCompare(b.path)));
+}
+
+// ============================================================================
+// 4. Rutas públicas (Auth, PWA icon y estáticos no sensibles)
+// ============================================================================
+app.post('/api/auth/login', rateLimitAuth, async (req, res) => {
+  const { username, password } = req.body || {};
+  const user = await auth.loginUser(username, password);
+  if (!user) return res.status(401).json({ error: 'Usuario o contraseña incorrectos.' });
+
+  ensureUserWelcomeDoc(user.id, user.username);
+  const token = auth.createSession(user);
+  auth.setSessionCookie(res, token);
+  res.json({ ok: true, user: { username: user.username, role: user.role } });
 });
 
-app.get('/api/images', (req, res) => {
-  fs.readdir(IMAGES_DIR, (err, files) => {
-    if (err) return res.json([]);
-    const imgs = files.filter(f => /\.(png|jpe?g|gif|webp)$/i.test(f)).sort();
-    res.json(imgs);
-  });
+app.post('/api/auth/register', rateLimitAuth, async (req, res) => {
+  const { username, password, code } = req.body || {};
+  const result = await auth.registerWithInvite(username, password, code);
+  if (result.error) return res.status(400).json({ error: result.error });
+
+  ensureUserWelcomeDoc(result.user.id, result.user.username);
+  const token = auth.createSession(result.user);
+  auth.setSessionCookie(res, token);
+  res.json({ ok: true, user: { username: result.user.username, role: result.user.role } });
 });
 
-app.get('/api/content', (req, res) => {
-  const filePath = resolveSafeMdPath(req.query.file || 'doc.md');
-  fs.readFile(filePath, 'utf8', (err, data) => {
-    if (err && err.code === 'ENOENT') return res.send('');
-    if (err) return res.status(500).send('Error leyendo el documento');
-    res.type('text/plain; charset=utf-8').send(data);
-  });
+app.post('/api/auth/logout', (req, res) => {
+  const session = auth.getSessionFromReq(req);
+  if (session) auth.destroySession(session.token);
+  auth.clearSessionCookie(res);
+  res.json({ ok: true });
 });
 
-app.post('/api/content', (req, res) => {
-  const filePath = resolveSafeMdPath(req.query.file || 'doc.md');
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  const bodyStr = typeof req.body === 'string' ? req.body : '';
-  fs.writeFile(filePath, bodyStr, 'utf8', err => {
-    if (err) return res.status(500).send('Error guardando el documento');
-    res.sendStatus(200);
-  });
-});
-
-app.post('/api/images', (req, res) => {
-  const rawName = path.basename(String(req.query.name || '')).replace(/[^a-zA-Z0-9._-]/g, '_');
-  if (!rawName) return res.status(400).send('Nombre de imagen inválido');
-
-  const bodyStr = typeof req.body === 'string' ? req.body : '';
-  const base64Data = bodyStr.replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/, '');
-  const buffer = Buffer.from(base64Data, 'base64');
-
-  const detectedExt = detectImageType(buffer);
-  if (!detectedExt) {
-    return res.status(415).send('Formato de imagen no permitido (solo PNG, JPG, GIF, WebP)');
-  }
-
-  const baseName = rawName.replace(/\.[^.]+$/, '');
-  const safeFileName = `${baseName}.${detectedExt}`;
-  const targetPath = path.resolve(IMAGES_DIR, safeFileName);
-  if (!targetPath.startsWith(IMAGES_DIR + path.sep)) {
-    return res.status(400).send('Ruta inválida');
-  }
-
-  fs.writeFile(targetPath, buffer, err => {
-    if (err) return res.status(500).send('Error guardando imagen');
-    res.status(200).send(safeFileName);
-  });
-});
-
-app.post('/api/rename', (req, res) => {
-  const oldName = req.query.old || (req.body && req.body.oldName);
-  const newName = req.query.new || (req.body && req.body.newName);
-  if (!oldName || !newName) return res.status(400).send('Nombres inválidos');
-
-  const oldPath = resolveSafeMdPath(oldName);
-  const newPath = resolveSafeMdPath(newName);
-  if (path.relative(CONTENT_DIR, oldPath) === 'doc.md') {
-    return res.status(400).send('No se puede renombrar doc.md base');
-  }
-
-  fs.mkdirSync(path.dirname(newPath), { recursive: true });
-  fs.rename(oldPath, newPath, err => {
-    if (err) return res.status(500).send('Error al renombrar el archivo');
-    res.send(path.relative(CONTENT_DIR, newPath).replace(/\\/g, '/'));
-  });
-});
-
-app.delete('/api/content', (req, res) => {
-  const filePath = resolveSafeMdPath(req.query.file || '');
-  if (path.relative(CONTENT_DIR, filePath) === 'doc.md') {
-    return res.status(400).send('No se puede eliminar doc.md base');
-  }
-  fs.unlink(filePath, err => {
-    if (err) return res.status(500).send('Error eliminando archivo');
-    res.sendStatus(200);
-  });
+app.get('/api/auth/me', auth.requireAuth, (req, res) => {
+  res.json({ username: req.user.username, role: req.user.role });
 });
 
 app.get('/api/pwa-icon', (req, res) => {
-  const pngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgBAMAAACBVGfHAAAAGFBMVEUce28/f39/bfl/pf9/v/+fpf+/v/////86wW7fAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAAQUlEQVQokWNgGAWjYBSMAggwMjI6AglG52B0cHAIIsH4Hw2D+f8ZMP7HgOH/B4b/Hxn+f2L4/5nh/xeG/98YBgEArRcX0b5L2pAAAAAASUVORK5CYII=';
-  res.setHeader('Content-Type', 'image/png');
-  res.send(Buffer.from(pngBase64, 'base64'));
+  const size = Math.min(Math.max(parseInt(req.query.size, 10) || 192, 64), 512);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 100 100"><rect width="100" height="100" rx="22" fill="#16171b"/><circle cx="30" cy="50" r="10" fill="#7c6cf6"/><circle cx="72" cy="30" r="8" fill="#34d399"/><circle cx="72" cy="70" r="8" fill="#38bdf8"/><path d="M39 46 L65 33 M39 54 L65 67" stroke="#e4e6eb" stroke-width="5" stroke-linecap="round"/></svg>`;
+  res.type('image/svg+xml').send(svg);
 });
 
-// 7. Manejador global de errores (sin filtrar stack traces en producción)
-app.use((err, req, res, next) => {
-  if (!IS_PROD) console.error(err);
-  const status = err.message && err.message.includes('Ruta') ? 400 : 500;
-  res.status(status).json({ error: 'Error procesando la solicitud' });
+// Proteger explícitamente la app principal antes de servir public/
+app.get(['/', '/index.html'], auth.requireAuth, (req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
 });
 
-const PORT = process.env.PORT || 9000;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`mdmap escuchando en puerto ${PORT} (${IS_PROD ? 'production' : 'development'})`);
+app.use(express.static(PUBLIC_DIR, { index: false }));
+
+// ============================================================================
+// 5. Rutas de Administración (Códigos de invitación)
+// ============================================================================
+app.get('/api/admin/invites', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  res.json(auth.listInvites());
 });
+
+app.post('/api/admin/invites', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  const note = (req.body && req.body.note) || '';
+  const invite = auth.createInvite(req.user.username, note);
+  res.json(invite);
+});
+
+// ============================================================================
+// 6. API de Notas e Imágenes (100% aislada por req.user.id)
+// ============================================================================
+app.get('/api/files', auth.requireAuth, (req, res) => {
+  const { contentRoot } = getUserDirs(req.user.id);
+  ensureUserWelcomeDoc(req.user.id, req.user.username);
+  const files = walkMarkdownFiles(contentRoot, contentRoot);
+  res.json(files);
+});
+
+app.get('/api/content', auth.requireAuth, (req, res) => {
+  const target = resolveSafeMdPath(req.user.id, req.query.file || 'doc.md');
+  if (!target) return res.status(400).send('Ruta inválida');
+  if (!fs.existsSync(target.resolved)) {
+    if (target.rel === 'doc.md') {
+      ensureUserWelcomeDoc(req.user.id, req.user.username);
+    } else {
+      return res.status(404).send('Archivo no encontrado');
+    }
+  }
+  res.type('text/plain; charset=utf-8').send(fs.readFileSync(target.resolved, 'utf8'));
+});
+
+app.post('/api/content', auth.requireAuth, (req, res) => {
+  const target = resolveSafeMdPath(req.user.id, req.query.file);
+  if (!target) return res.status(400).send('Ruta inválida');
+  fs.mkdirSync(path.dirname(target.resolved), { recursive: true });
+  fs.writeFileSync(target.resolved, typeof req.body === 'string' ? req.body : '', 'utf8');
+  res.send('OK');
+});
+
+app.delete('/api/content', auth.requireAuth, (req, res) => {
+  const target = resolveSafeMdPath(req.user.id, req.query.file);
+  if (!target || target.rel === 'doc.md') return res.status(400).send('No permitido');
+  if (fs.existsSync(target.resolved)) fs.unlinkSync(target.resolved);
+  res.send('OK');
+});
+
+app.post('/api/rename', auth.requireAuth, (req, res) => {
+  const oldTarget = resolveSafeMdPath(req.user.id, req.query.old);
+  const newTarget = resolveSafeMdPath(req.user.id, req.query.new);
+  if (!oldTarget || !newTarget || oldTarget.rel === 'doc.md') {
+    return res.status(400).send('Ruta inválida');
+  }
+  if (!fs.existsSync(oldTarget.resolved)) return res.status(404).send('No encontrado');
+  fs.mkdirSync(path.dirname(newTarget.resolved), { recursive: true });
+  fs.renameSync(oldTarget.resolved, newTarget.resolved);
+  res.type('text/plain').send(newTarget.rel);
+});
+
+app.get('/api/images', auth.requireAuth, (req, res) => {
+  const { imagesRoot } = getUserDirs(req.user.id);
+  const imgs = fs.readdirSync(imagesRoot).filter((f) => ALLOWED_IMG_EXT.has(path.extname(f).toLowerCase()));
+  res.json(imgs);
+});
+
+app.post('/api/images', auth.requireAuth, (req, res) => {
+  const target = resolveSafeImgPath(req.user.id, req.query.name);
+  if (!target) return res.status(400).send('Nombre o extensión de imagen no permitida');
+
+  const dataUri = typeof req.body === 'string' ? req.body : '';
+  const match = dataUri.match(/^data:image\/(png|jpeg|jpg|gif|webp);base64,([A-Za-z0-9+/=]+)$/);
+  if (!match) return res.status(400).send('Formato Data URI inválido');
+
+  const buf = Buffer.from(match[2], 'base64');
+  if (buf.length > MAX_IMG_BYTES) return res.status(413).send('Imagen demasiado grande');
+
+  fs.writeFileSync(target.resolved, buf);
+  res.type('text/plain').send(target.safeName);
+});
+
+// Ruta protegida para servir imágenes únicamente del usuario autenticado
+app.get('/images/:filename', auth.requireAuth, (req, res) => {
+  const target = resolveSafeImgPath(req.user.id, req.params.filename);
+  if (!target || !fs.existsSync(target.resolved)) return res.status(404).send('No encontrada');
+  res.sendFile(target.resolved);
+});
+
+// ============================================================================
+// 7. Arranque
+// ============================================================================
+(async () => {
+  try {
+    migrateLegacyToAdmin();
+    await auth.ensureAdminUser();
+    app.listen(PORT, () => {
+      console.log(`mdmap escuchando en puerto ${PORT} (${NODE_ENV})`);
+    });
+  } catch (err) {
+    console.error('Error al iniciar mdmap:', err.message);
+    process.exit(1);
+  }
+})();

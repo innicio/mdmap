@@ -1,12 +1,23 @@
 {
-  "name": "offline-markmap",
-  "version": "1.0.0",
-  "description": "Editor Markmap offline con autosave y exportación",
-  "main": "server.js",
+  "name": "mdmap",
+  "version": "2.0.0",
+  "private": true,
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "build": "node scripts/build-assets.mjs"
   },
   "dependencies": {
-    "express": "^4.18.2"
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@markmap/canvas": "^1.0.0",
+    "@markmap/element": "^1.0.0",
+    "@markmap/plugin-math": "^1.0.0",
+    "@markmap/render": "^1.0.0",
+    "@markmap/view": "^1.0.0",
+    "dompurify": "^3.2.4",
+    "esbuild": "^0.25.0",
+    "katex": "^0.16.21",
+    "marked": "^15.0.0"
   }
 }
