@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mdmap-pwa-v7';
+const CACHE_NAME = 'mdmap-pwa-v8';
 
 // Solo assets públicos y estáticos (nunca '/', '/index.html' ni '/images/')
 const PRECACHE_ASSETS = [

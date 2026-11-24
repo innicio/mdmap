@@ -21,12 +21,12 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
-    #networks:
-    #  - cloudflare_default
+    networks:
+      - cloudflare_default
 
-#networks:
-#  cloudflare_default:
-#    external: true
+networks:
+  cloudflare_default:
+    external: true
 
 
       

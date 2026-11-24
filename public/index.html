@@ -94,6 +94,7 @@
       backdrop-filter: blur(4px); z-index: 100;
       display: flex; justify-content: center; align-items: flex-start; padding-top: 12vh;
     }
+    
     #command-palette-backdrop.hidden { display: none !important; }
     #command-palette {
       width: 92%; max-width: 520px; background: var(--bg-secondary);
@@ -385,6 +386,25 @@
     .invite-item:hover { border-color: var(--accent); }
     .invite-item small { color: var(--text-muted); font-family: system-ui, sans-serif; }
 
+    #pass-modal-backdrop {
+      position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(4px); z-index: 110;
+      display: flex; justify-content: center; align-items: center; padding: 16px;
+    }
+    #pass-modal-backdrop.hidden { display: none !important; }
+    #pass-modal {
+      width: 100%; max-width: 360px; background: var(--bg-secondary);
+      border: 1px solid var(--border); border-radius: 12px; padding: 18px;
+      display: flex; flex-direction: column; gap: 10px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
+    }
+    #pass-modal h4 { margin: 0 0 4px; font-size: 14px; }
+    #pass-modal input[type="password"] {
+      width: 100%; background: var(--bg-primary); color: var(--text-normal);
+      border: 1px solid var(--border); border-radius: 7px; padding: 8px 10px; font-size: 13px;
+    }
+    #pass-modal-msg { font-size: 12px; min-height: 16px; color: var(--danger); }
+
     .mobile-only { display: none !important; }
     #drawer-backdrop { display: none; }
 
@@ -453,6 +473,28 @@
       <div id="cmd-results"></div>
     </div>
   </div>
+
+  <div id="command-palette-backdrop" class="hidden">
+    <div id="command-palette">
+      <input type="text" id="cmd-input" placeholder="Escribe un comando o busca una nota..."/>
+      <div id="cmd-results"></div>
+    </div>
+  </div>
+
+  <div id="pass-modal-backdrop" class="hidden">
+    <form id="pass-modal">
+      <h4>Cambiar contraseña</h4>
+      <input type="password" id="pass-current" placeholder="Contraseña actual" autocomplete="current-password" required/>
+      <input type="password" id="pass-new" placeholder="Nueva contraseña (mín. 8 caracteres)" autocomplete="new-password" minlength="8" required/>
+      <input type="password" id="pass-confirm" placeholder="Confirmar nueva contraseña" autocomplete="new-password" minlength="8" required/>
+      <div id="pass-modal-msg"></div>
+      <div class="btn-row">
+        <button type="button" id="btn-pass-cancel">Cancelar</button>
+        <button type="submit" class="primary">Guardar</button>
+      </div>
+    </form>
+  </div>
+
 
   <!-- Barra Superior -->
   <header id="app-header">
@@ -526,6 +568,7 @@
           <span>👤 <strong id="user-name">...</strong></span>
           <span id="user-role" class="role-badge"></span>
         </div>
+        <button id="btn-change-pass">🔑 Cambiar contraseña</button>
         <button id="btn-logout" class="danger">Cerrar sesión</button>
 
         <div id="admin-invites-box" style="display:none; flex-direction:column; gap:6px; margin-top:4px;">
@@ -1666,6 +1709,53 @@ ${safeMd}
       document.getElementById('btn-logout').onclick = async () => {
         await fetch('/api/auth/logout', { method: 'POST' });
         location.href = '/login.html';
+      };
+
+      const passBackdrop = document.getElementById('pass-modal-backdrop');
+      const passForm = document.getElementById('pass-modal');
+      const passMsg = document.getElementById('pass-modal-msg');
+
+      function closePassModal() {
+        passBackdrop.classList.add('hidden');
+        passForm.reset();
+        passMsg.textContent = '';
+      }
+
+      document.getElementById('btn-change-pass').onclick = () => {
+        passBackdrop.classList.remove('hidden');
+        closeMobileDrawers();
+        setTimeout(() => document.getElementById('pass-current').focus(), 40);
+      };
+      document.getElementById('btn-pass-cancel').onclick = closePassModal;
+      passBackdrop.onclick = (e) => { if (e.target === passBackdrop) closePassModal(); };
+
+      passForm.onsubmit = async (e) => {
+        e.preventDefault();
+        passMsg.style.color = 'var(--danger)';
+        passMsg.textContent = '';
+
+        const currentPassword = document.getElementById('pass-current').value;
+        const newPassword = document.getElementById('pass-new').value;
+        const confirmPassword = document.getElementById('pass-confirm').value;
+
+        if (newPassword !== confirmPassword) {
+          passMsg.textContent = 'Las contraseñas nuevas no coinciden.';
+          return;
+        }
+
+        const r = await fetch('/api/auth/password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ currentPassword, newPassword })
+        });
+
+        if (r.ok) {
+          passMsg.style.color = '#34d399';
+          passMsg.textContent = 'Contraseña actualizada.';
+          setTimeout(closePassModal, 800);
+        } else {
+          passMsg.textContent = (await r.json().catch(() => ({}))).error || 'No se pudo cambiar la contraseña.';
+        }
       };
 
       if (me.role === 'admin') {

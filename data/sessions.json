@@ -4,5 +4,11 @@
     "username": "admin",
     "role": "admin",
     "expiresAt": 1798112037792
+  },
+  "6f402faa206411d74a8cc5bab13f0d87d5f3539ce5746764cfdf36c535c95231": {
+    "userId": "usr_admin",
+    "username": "admin",
+    "role": "admin",
+    "expiresAt": 1798122782247
   }
 }

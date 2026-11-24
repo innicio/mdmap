@@ -232,6 +232,36 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+async function changePassword(userId, currentPassword, newPassword, keepSessionToken = null) {
+  if (typeof newPassword !== 'string' || newPassword.length < 8) {
+    return { error: 'La nueva contraseña debe tener al menos 8 caracteres.' };
+  }
+
+  const users = readJson(USERS_FILE, []);
+  const user = users.find((u) => u.id === userId);
+  if (!user) return { error: 'Usuario no encontrado.' };
+
+  const ok = await verifyPassword(String(currentPassword || ''), user.passwordHash);
+  if (!ok) return { error: 'La contraseña actual no es correcta.' };
+
+  user.passwordHash = await hashPassword(newPassword);
+  user.passwordUpdatedAt = new Date().toISOString();
+  writeJsonAtomic(USERS_FILE, users);
+
+  // Revocar el resto de sesiones activas del usuario (manteniendo la actual)
+  const sessions = readJson(SESSIONS_FILE, {});
+  let changed = false;
+  for (const [sid, s] of Object.entries(sessions)) {
+    if (s && s.userId === userId && sid !== keepSessionToken) {
+      delete sessions[sid];
+      changed = true;
+    }
+  }
+  if (changed) writeJsonAtomic(SESSIONS_FILE, sessions);
+
+  return { ok: true };
+}
+
 module.exports = {
   ensureAdminUser,
   createSession,
@@ -244,5 +274,6 @@ module.exports = {
   listInvites,
   registerWithInvite,
   requireAuth,
-  requireAdmin
+  requireAdmin,
+  changePassword
 };

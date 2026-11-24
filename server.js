@@ -219,6 +219,18 @@ app.get('/api/auth/me', auth.requireAuth, (req, res) => {
   res.json({ username: req.user.username, role: req.user.role });
 });
 
+app.post('/api/auth/password', auth.requireAuth, rateLimitAuth, async (req, res) => {
+  const { currentPassword, newPassword } = req.body || {};
+  const result = await auth.changePassword(
+    req.user.id,
+    currentPassword,
+    newPassword,
+    req.sessionToken
+  );
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.json({ ok: true });
+});
+
 app.get('/api/pwa-icon', (req, res) => {
   const size = Math.min(Math.max(parseInt(req.query.size, 10) || 192, 64), 512);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 100 100"><rect width="100" height="100" rx="22" fill="#16171b"/><circle cx="30" cy="50" r="10" fill="#7c6cf6"/><circle cx="72" cy="30" r="8" fill="#34d399"/><circle cx="72" cy="70" r="8" fill="#38bdf8"/><path d="M39 46 L65 33 M39 54 L65 67" stroke="#e4e6eb" stroke-width="5" stroke-linecap="round"/></svg>`;
